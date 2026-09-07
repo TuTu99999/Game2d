@@ -42,17 +42,14 @@ public class SparkSkill {
     
     private void createWaveProjectiles() {
         // Tìm quái vật gần nhất để làm hướng chính
-        Skeleton nearestSkeleton = findNearestSkeleton();
-        PointF mainTarget = null;
-        
-        if (nearestSkeleton != null) {
-            mainTarget = new PointF(nearestSkeleton.getHitbox().centerX(), nearestSkeleton.getHitbox().centerY());
-        }
+        PointF mainTarget = findNearestTarget();
         
         for (int i = 0; i < projectileCount; i++) {
             PointF target;
             
-            if (mainTarget != null && i < 6) {
+            if (mainTarget != null && i == 0) {
+                target = new PointF(mainTarget.x, mainTarget.y);
+            } else if (mainTarget != null && i < 6) {
                 // 6 tia đầu bắn về phía quái vật gần nhất với độ lệch nhỏ
                 float angleOffset = (random.nextFloat() - 0.5f) * 60f; // ±30 độ
                 float distance = range * (0.8f + random.nextFloat() * 0.2f);
@@ -93,17 +90,14 @@ public class SparkSkill {
     
     private void createRandomProjectiles() {
         // Tìm quái vật gần nhất để làm hướng chính
-        Skeleton nearestSkeleton = findNearestSkeleton();
-        PointF mainTarget = null;
-        
-        if (nearestSkeleton != null) {
-            mainTarget = new PointF(nearestSkeleton.getHitbox().centerX(), nearestSkeleton.getHitbox().centerY());
-        }
+        PointF mainTarget = findNearestTarget();
         
         for (int i = 0; i < projectileCount; i++) {
             PointF target;
             
-            if (mainTarget != null && i < 8) {
+            if (mainTarget != null && i == 0) {
+                target = new PointF(mainTarget.x, mainTarget.y);
+            } else if (mainTarget != null && i < 8) {
                 // 8 tia đầu bắn về phía quái vật gần nhất với độ lệch nhỏ
                 float angleOffset = (random.nextFloat() - 0.5f) * 60f; // ±30 độ
                 float distance = range * (0.8f + random.nextFloat() * 0.2f);
@@ -139,9 +133,9 @@ public class SparkSkill {
         }
     }
     
-    private Skeleton findNearestSkeleton() {
+    private PointF findNearestTarget() {
         if (playing != null) {
-            return playing.findNearestSkeleton(startPos.x, startPos.y, range);
+            return playing.findNearestEnemyPosition(startPos.x, startPos.y, range);
         }
         return null;
     }
@@ -201,7 +195,7 @@ public class SparkSkill {
                         }
                     }
                     projectile.explode();
-                    break;
+                    return;
                 }
             }
         }
@@ -219,9 +213,13 @@ public class SparkSkill {
                         System.out.println("💀 Boom chết bởi SparkSkill! Kill count tăng!");
                     }
                     projectile.explode();
-                    break;
+                    return;
                 }
             }
+        }
+
+        if (playing.damageBossIfHit(projectile.getHitbox(), projectile.getDamage())) {
+            projectile.explode();
         }
     }
     

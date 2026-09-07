@@ -4,8 +4,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.PointF;
-import android.media.AudioAttributes;
-import android.media.SoundPool;
+import android.graphics.RectF;
 import com.tutorial.androidgametutorial.main.MainActivity;
 import com.tutorial.androidgametutorial.R;
 
@@ -24,9 +23,8 @@ public class ExplosionEffect {
     private static final long FRAME_DURATION = 50; // ms per frame
     private boolean active = true;
     private PointF pos;
-    private static SoundPool soundPool;
-    private static int explosionSoundId;
-
+    private final float renderSize;
+    private final RectF destination = new RectF();
     static {
         frames = new Bitmap[FRAME_COUNT];
         for (int i = 0; i < FRAME_COUNT; i++) {
@@ -36,23 +34,16 @@ public class ExplosionEffect {
             );
         }
 
-        AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_GAME)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build();
-
-        soundPool = new SoundPool.Builder()
-                .setMaxStreams(5)
-                .setAudioAttributes(audioAttributes)
-                .build();
-
-        explosionSoundId = soundPool.load(MainActivity.getGameContext(), R.raw.explosion, 1);
     }
 
     public ExplosionEffect(PointF pos) {
+        this(pos, 96f);
+    }
+
+    public ExplosionEffect(PointF pos, float renderSize) {
         this.pos = pos;
+        this.renderSize = renderSize;
         this.lastFrameTime = System.currentTimeMillis();
-        soundPool.play(explosionSoundId, 1, 1, 1, 0, 1f);
     }
 
     public void update() {
@@ -71,9 +62,15 @@ public class ExplosionEffect {
         if (!active) return;
         Bitmap frame = frames[Math.min(currentFrame, FRAME_COUNT - 1)];
         if (frame != null) {
-            float drawX = pos.x + cameraX - frame.getWidth() / 2f;
-            float drawY = pos.y + cameraY - frame.getHeight() / 2f;
-            c.drawBitmap(frame, drawX, drawY, null);
+            float centerX = pos.x + cameraX;
+            float centerY = pos.y + cameraY;
+            destination.set(
+                    centerX - renderSize / 2f,
+                    centerY - renderSize / 2f,
+                    centerX + renderSize / 2f,
+                    centerY + renderSize / 2f
+            );
+            c.drawBitmap(frame, null, destination, null);
         }
     }
 
@@ -81,10 +78,4 @@ public class ExplosionEffect {
         return active;
     }
 
-    public static void dispose() {
-        if (soundPool != null) {
-            soundPool.release();
-            soundPool = null;
-        }
-    }
 }

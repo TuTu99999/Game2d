@@ -26,7 +26,6 @@ public class GamePanel extends SurfaceView implements SurfaceHolder.Callback {
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
         game.setSurfaceReady(true);
-        game.startGameLoop();
     }
 
     @Override
@@ -37,11 +36,18 @@ public class GamePanel extends SurfaceView implements SurfaceHolder.Callback {
 
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
-        // Mark surface as not ready to prevent further rendering
         game.setSurfaceReady(false);
-        // Clean up resources
-        game.cleanup();
     }
 
+    public void pauseGame() {
+        game.pauseGame();
+    }
 
+    public void resumeGame() {
+        game.resumeGame();
+    }
+
+    public void destroyGame() {
+        game.cleanup();
+    }
 }

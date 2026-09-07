@@ -2,26 +2,35 @@ package com.tutorial.androidgametutorial.ui;
 
 
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 
 import com.tutorial.androidgametutorial.R;
-import com.tutorial.androidgametutorial.helpers.interfaces.BitmapMethods;
+import com.tutorial.androidgametutorial.helpers.BitmapCache;
 import com.tutorial.androidgametutorial.main.MainActivity;
 
-public enum GameImages implements BitmapMethods {
+public enum GameImages {
 
 
+    HOME_BACKGROUND(R.drawable.home_background_4_maps),
     MAINMENU_MENUBG(R.drawable.mainmenu_menubackground),
     DEATH_MENU_MENUBG(R.drawable.menu_youdied_background);
 
-    private final Bitmap image;
+    private final int resourceId;
+    private volatile Bitmap image;
 
     GameImages(int resID) {
-        options.inScaled = false;
-        image = BitmapFactory.decodeResource(MainActivity.getGameContext().getResources(), resID, options);
+        resourceId = resID;
     }
 
     public Bitmap getImage() {
+        if (image == null || image.isRecycled()) {
+            synchronized (this) {
+                if (image == null || image.isRecycled()) {
+                    image = BitmapCache.get(
+                            MainActivity.getGameContext(), resourceId
+                    );
+                }
+            }
+        }
         return image;
     }
 }

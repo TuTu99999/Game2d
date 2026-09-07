@@ -1,11 +1,11 @@
 package com.tutorial.androidgametutorial.entities;
 
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 
 import com.tutorial.androidgametutorial.main.MainActivity;
 import com.tutorial.androidgametutorial.R;
 import com.tutorial.androidgametutorial.helpers.GameConstants;
+import com.tutorial.androidgametutorial.helpers.BitmapCache;
 import com.tutorial.androidgametutorial.helpers.interfaces.BitmapMethods;
 
 public class EffectExplosionSprites implements BitmapMethods {
@@ -28,17 +28,10 @@ public class EffectExplosionSprites implements BitmapMethods {
         };
         
         for (int i = 0; i < explosionSprites.length; i++) {
-            options.inScaled = false;
-            Bitmap original = BitmapFactory.decodeResource(
-                MainActivity.getGameContext().getResources(), 
-                explosionResIds[i], 
-                options
+            explosionSprites[i] = BitmapCache.getScaled(
+                    MainActivity.getGameContext(), explosionResIds[i],
+                    GameConstants.Sprite.SIZE, GameConstants.Sprite.SIZE, false
             );
-            // Scale trực tiếp từ kích thước gốc lên kích thước game (96x96)
-            explosionSprites[i] = Bitmap.createScaledBitmap(original, 
-                GameConstants.Sprite.SIZE, 
-                GameConstants.Sprite.SIZE, 
-                false);
         }
     }
     

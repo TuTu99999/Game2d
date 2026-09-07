@@ -1,15 +1,32 @@
+# Android Studio / IntelliJ (machine-specific files)
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+
+# Gradle / Kotlin caches and generated build output
+.gradle/
+.kotlin/
+/build/
+**/build/
+
+# Local Android SDK configuration
 local.properties
+
+# Native build output
+.externalNativeBuild/
+.cxx/
+
+# Generated packages, signing files and diagnostics
+*.apk
+*.aab
+*.ap_
+*.jks
+*.keystore
+keystore.properties
+*.hprof
+*.log
+/captures/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+desktop.ini

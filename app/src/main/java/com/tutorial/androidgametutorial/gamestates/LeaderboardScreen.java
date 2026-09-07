@@ -20,6 +20,7 @@ public class LeaderboardScreen extends BaseState implements GameStateInterface {
 
     private CustomButton backButton, clearButton;
     private Paint titlePaint, headerPaint, entryPaint, buttonPaint, rankPaint;
+    private Paint emptyPaint, linePaint, columnPaint, borderPaint, buttonTextPaint, panelPaint;
     private LeaderboardManager leaderboardManager;
     private List<LeaderboardManager.LeaderboardEntry> topScores;
 
@@ -33,42 +34,74 @@ public class LeaderboardScreen extends BaseState implements GameStateInterface {
     }
 
     private void initButtons() {
-        float buttonWidth = 180;
-        float buttonHeight = 70;
+        float buttonWidth = Math.min(220, GAME_WIDTH * 0.25f);
+        float buttonHeight = Math.min(70, GAME_HEIGHT * 0.08f);
         float centerX = GAME_WIDTH / 2f;
-        float bottomY = GAME_HEIGHT - 100;
+        float bottomY = GAME_HEIGHT * 0.86f;
 
         backButton = new CustomButton(centerX - buttonWidth - 20, bottomY, buttonWidth, buttonHeight);
         clearButton = new CustomButton(centerX + 20, bottomY, buttonWidth, buttonHeight);
     }
 
     private void initPaints() {
+        float textScale = GAME_HEIGHT / 1080f;
+
         titlePaint = new Paint();
-        titlePaint.setColor(Color.YELLOW);
-        titlePaint.setTextSize(70);
+        titlePaint.setColor(Color.rgb(255, 215, 64));
+        titlePaint.setTextSize(Math.max(36, 64 * textScale));
         titlePaint.setFakeBoldText(true);
         titlePaint.setTextAlign(Paint.Align.CENTER);
 
         headerPaint = new Paint();
         headerPaint.setColor(Color.CYAN);
-        headerPaint.setTextSize(40);
+        headerPaint.setTextSize(Math.max(22, 34 * textScale));
         headerPaint.setFakeBoldText(true);
         headerPaint.setTextAlign(Paint.Align.CENTER);
 
         entryPaint = new Paint();
         entryPaint.setColor(Color.WHITE);
-        entryPaint.setTextSize(35);
-        entryPaint.setTextAlign(Paint.Align.LEFT);
+        entryPaint.setTextSize(Math.max(18, 30 * textScale));
+        entryPaint.setTextAlign(Paint.Align.CENTER);
 
         rankPaint = new Paint();
         rankPaint.setColor(Color.YELLOW);
-        rankPaint.setTextSize(40);
+        rankPaint.setTextSize(Math.max(20, 34 * textScale));
         rankPaint.setFakeBoldText(true);
         rankPaint.setTextAlign(Paint.Align.CENTER);
 
         buttonPaint = new Paint();
         buttonPaint.setColor(Color.BLUE);
         buttonPaint.setStyle(Paint.Style.FILL);
+
+        emptyPaint = new Paint();
+        emptyPaint.setColor(Color.GRAY);
+        emptyPaint.setTextSize(Math.max(22, 34 * textScale));
+        emptyPaint.setTextAlign(Paint.Align.CENTER);
+
+        linePaint = new Paint();
+        linePaint.setColor(Color.GRAY);
+        linePaint.setStrokeWidth(2);
+
+        columnPaint = new Paint();
+        columnPaint.setColor(Color.CYAN);
+        columnPaint.setTextSize(Math.max(18, 28 * textScale));
+        columnPaint.setFakeBoldText(true);
+        columnPaint.setTextAlign(Paint.Align.CENTER);
+
+        borderPaint = new Paint();
+        borderPaint.setColor(Color.WHITE);
+        borderPaint.setStyle(Paint.Style.STROKE);
+        borderPaint.setStrokeWidth(3);
+
+        buttonTextPaint = new Paint();
+        buttonTextPaint.setColor(Color.WHITE);
+        buttonTextPaint.setTextSize(Math.max(18, 26 * textScale));
+        buttonTextPaint.setFakeBoldText(true);
+        buttonTextPaint.setTextAlign(Paint.Align.CENTER);
+
+        panelPaint = new Paint();
+        panelPaint.setColor(Color.rgb(22, 31, 50));
+        panelPaint.setStyle(Paint.Style.FILL);
     }
 
     @Override
@@ -78,127 +111,94 @@ public class LeaderboardScreen extends BaseState implements GameStateInterface {
 
     @Override
     public void render(Canvas c) {
-        // Draw background
-        c.drawColor(Color.BLACK);
+        c.drawColor(Color.rgb(8, 12, 24));
 
-        // Draw title
-        c.drawText("🏆 BẢNG XẾP HẠNG 🏆", GAME_WIDTH / 2f, 120, titlePaint);
+        c.drawText(game.text("LEADERBOARD", "BẢNG XẾP HẠNG"),
+                GAME_WIDTH / 2f, GAME_HEIGHT * 0.12f, titlePaint);
+        c.drawText(game.text("TOP 6 SCORES", "6 THÀNH TÍCH CAO NHẤT"),
+                GAME_WIDTH / 2f, GAME_HEIGHT * 0.20f, headerPaint);
 
-        // Draw header
-        c.drawText("TOP 6 KỶ LỤC CAO NHẤT", GAME_WIDTH / 2f, 200, headerPaint);
+        float panelLeft = GAME_WIDTH * 0.08f;
+        float panelRight = GAME_WIDTH * 0.92f;
+        float panelTop = GAME_HEIGHT * 0.24f;
+        float panelBottom = GAME_HEIGHT * 0.79f;
+        c.drawRoundRect(panelLeft, panelTop, panelRight, panelBottom, 24, 24, panelPaint);
 
-        // Draw leaderboard entries
-        float startY = 280;
-        float lineHeight = 80;
+        float rankX = GAME_WIDTH * 0.18f;
+        float scoreX = GAME_WIDTH * 0.45f;
+        float dateX = GAME_WIDTH * 0.75f;
+        float headerY = GAME_HEIGHT * 0.29f;
+        float startY = GAME_HEIGHT * 0.36f;
+        float lineHeight = GAME_HEIGHT * 0.07f;
+
+        c.drawText(game.text("RANK", "HẠNG"), rankX, headerY, columnPaint);
+        c.drawText(game.text("SCORE", "ĐIỂM"), scoreX, headerY, columnPaint);
+        c.drawText(game.text("DATE", "NGÀY"), dateX, headerY, columnPaint);
 
         if (topScores.isEmpty()) {
-            Paint emptyPaint = new Paint();
-            emptyPaint.setColor(Color.GRAY);
-            emptyPaint.setTextSize(40);
-            emptyPaint.setTextAlign(Paint.Align.CENTER);
-            c.drawText("Chưa có kỷ lục nào!", GAME_WIDTH / 2f, startY + 100, emptyPaint);
+            c.drawText(game.text("NO SCORES YET", "CHƯA CÓ THÀNH TÍCH"),
+                    GAME_WIDTH / 2f, GAME_HEIGHT * 0.50f, emptyPaint);
         } else {
             for (int i = 0; i < topScores.size(); i++) {
                 LeaderboardManager.LeaderboardEntry entry = topScores.get(i);
                 float y = startY + i * lineHeight;
 
-                // Draw rank với màu sắc đặc biệt cho top 3
                 Paint currentRankPaint = getRankPaint(entry.rank);
                 String rankText = getRankDisplay(entry.rank);
-                c.drawText(rankText, 150, y, currentRankPaint);
+                c.drawText(rankText, rankX, y, currentRankPaint);
 
-                // Draw score
-                String scoreText = entry.score + " quái";
-                c.drawText(scoreText, 300, y, entryPaint);
+                String scoreText = entry.score + game.text(" KILLS", " QUÁI");
+                c.drawText(scoreText, scoreX, y, entryPaint);
 
-                // Draw date
-                c.drawText(entry.date, GAME_WIDTH - 200, y, entryPaint);
+                c.drawText(entry.date, dateX, y, entryPaint);
 
-                // Draw separator line
                 if (i < topScores.size() - 1) {
-                    Paint linePaint = new Paint();
-                    linePaint.setColor(Color.GRAY);
-                    linePaint.setStrokeWidth(2);
-                    c.drawLine(100, y + 25, GAME_WIDTH - 100, y + 25, linePaint);
+                    c.drawLine(panelLeft + 30, y + lineHeight * 0.35f,
+                            panelRight - 30, y + lineHeight * 0.35f, linePaint);
                 }
             }
         }
 
-        // Draw column headers
-        Paint columnPaint = new Paint();
-        columnPaint.setColor(Color.CYAN);
-        columnPaint.setTextSize(30);
-        columnPaint.setFakeBoldText(true);
-        columnPaint.setTextAlign(Paint.Align.CENTER);
-
-        c.drawText("Hạng", 150, 250, columnPaint);
-        columnPaint.setTextAlign(Paint.Align.LEFT);
-        c.drawText("Điểm số", 300, 250, columnPaint);
-        c.drawText("Ngày", GAME_WIDTH - 200, 250, columnPaint);
-
-        // Draw buttons
-        drawButton(c, backButton, "TRỞ VỀ", Color.GREEN);
-        drawButton(c, clearButton, "XÓA HẾT", Color.RED);
+        drawButton(c, backButton, game.text("BACK", "QUAY LẠI"), Color.rgb(31, 78, 121));
+        drawButton(c, clearButton, game.text("CLEAR", "XÓA"), Color.rgb(150, 45, 45));
     }
 
     private Paint getRankPaint(int rank) {
-        Paint paint = new Paint();
-        paint.setTextSize(40);
-        paint.setFakeBoldText(true);
-        paint.setTextAlign(Paint.Align.CENTER);
-
         switch (rank) {
             case 1:
-                paint.setColor(Color.rgb(255, 215, 0)); // Gold
+                rankPaint.setColor(Color.rgb(255, 215, 0)); // Gold
                 break;
             case 2:
-                paint.setColor(Color.rgb(192, 192, 192)); // Silver
+                rankPaint.setColor(Color.rgb(192, 192, 192)); // Silver
                 break;
             case 3:
-                paint.setColor(Color.rgb(205, 127, 50)); // Bronze
+                rankPaint.setColor(Color.rgb(205, 127, 50)); // Bronze
                 break;
             default:
-                paint.setColor(Color.WHITE);
+                rankPaint.setColor(Color.WHITE);
                 break;
         }
-        return paint;
+        return rankPaint;
     }
 
     private String getRankDisplay(int rank) {
-        switch (rank) {
-            case 1: return "🥇";
-            case 2: return "🥈";
-            case 3: return "🥉";
-            default: return "#" + rank;
-        }
+        return "#" + rank;
     }
 
     private void drawButton(Canvas c, CustomButton button, String text, int color) {
         RectF buttonRect = button.getHitbox();
 
         // Draw button background
-        Paint bgPaint = new Paint();
-        bgPaint.setColor(color);
-        bgPaint.setStyle(Paint.Style.FILL);
-        c.drawRect(buttonRect, bgPaint);
+        buttonPaint.setColor(color);
+        c.drawRoundRect(buttonRect, 18, 18, buttonPaint);
 
         // Draw button border
-        Paint borderPaint = new Paint();
-        borderPaint.setColor(Color.WHITE);
-        borderPaint.setStyle(Paint.Style.STROKE);
-        borderPaint.setStrokeWidth(3);
-        c.drawRect(buttonRect, borderPaint);
+        c.drawRoundRect(buttonRect, 18, 18, borderPaint);
 
         // Draw button text
-        Paint textPaint = new Paint();
-        textPaint.setColor(Color.WHITE);
-        textPaint.setTextSize(28);
-        textPaint.setFakeBoldText(true);
-        textPaint.setTextAlign(Paint.Align.CENTER);
-
         float textX = buttonRect.centerX();
-        float textY = buttonRect.centerY() + 10;
-        c.drawText(text, textX, textY, textPaint);
+        float textY = buttonRect.centerY() - (buttonTextPaint.ascent() + buttonTextPaint.descent()) / 2;
+        c.drawText(text, textX, textY, buttonTextPaint);
     }
 
     @Override

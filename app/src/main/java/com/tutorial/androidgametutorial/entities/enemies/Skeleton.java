@@ -26,6 +26,7 @@ public class Skeleton extends Character {
     private float chaseSpeed = 600f;   // Tăng tốc độ khi đuổi người chơi
     private float chaseRange = 800f;   // Tăng phạm vi phát hiện người chơi
     private float aggressiveChaseRange = 1200f; // Phạm vi đuổi rất tích cực
+    private int obstacleDirection = rand.nextBoolean() ? 1 : -1;
 
     private long timerBeforeAttack, timerAttackDuration;
     private long timeToAttack = 500, timeForAttackDuration = 250;
@@ -34,7 +35,12 @@ public class Skeleton extends Character {
 
     public Skeleton(PointF pos, GameCharacters type) {
         super(pos, type);
+        applyDifficulty(Game.Difficulty.EASY);
+    }
+
+    public void applyDifficulty(Game.Difficulty difficulty) {
         setStartHealth(100);
+        setDamage(15);
     }
 
     public void update(double delta, GameMap gameMap) {
@@ -94,7 +100,7 @@ public class Skeleton extends Character {
         this.cameraY = cameraY;
 
         // Điều chỉnh behavior theo độ khó - CHỈ SET STATS MỘT LẦN KHI TẠO
-        boolean shouldChase = (playing.getCurrentDifficulty() == Game.Difficulty.HARD);
+        boolean shouldChase = false;
 
         if (shouldChase) {
             // Chế độ khó: có chase, stats cao hơn
@@ -167,25 +173,47 @@ public class Skeleton extends Character {
         }
 
         if (Math.abs(deltaX) > Math.abs(deltaY)) {
-            if (HelpMethods.CanWalkHere(hitbox, deltaX, 0, gameMap)) {
-                hitbox.left += deltaX;
-                hitbox.right += deltaX;
-                faceDir = deltaX > 0 ? GameConstants.Face_Dir.RIGHT : GameConstants.Face_Dir.LEFT;
-            } else if (HelpMethods.CanWalkHere(hitbox, 0, deltaY, gameMap)) {
-                hitbox.top += deltaY;
-                hitbox.bottom += deltaY;
-                faceDir = deltaY > 0 ? GameConstants.Face_Dir.DOWN : GameConstants.Face_Dir.UP;
+            if (!moveHorizontal(deltaX, gameMap)) {
+                moveAroundHorizontalObstacle(deltaChange, gameMap);
             }
-        } else {
-            if (HelpMethods.CanWalkHere(hitbox, 0, deltaY, gameMap)) {
-                hitbox.top += deltaY;
-                hitbox.bottom += deltaY;
-                faceDir = deltaY > 0 ? GameConstants.Face_Dir.DOWN : GameConstants.Face_Dir.UP;
-            } else if (HelpMethods.CanWalkHere(hitbox, deltaX, 0, gameMap)) {
-                hitbox.left += deltaX;
-                hitbox.right += deltaX;
-                faceDir = deltaX > 0 ? GameConstants.Face_Dir.RIGHT : GameConstants.Face_Dir.LEFT;
-            }
+        } else if (!moveVertical(deltaY, gameMap)) {
+            moveAroundVerticalObstacle(deltaChange, gameMap);
+        }
+    }
+
+    private boolean moveHorizontal(float amount, GameMap gameMap) {
+        if (Math.abs(amount) < 0.01f || !HelpMethods.CanWalkHere(hitbox, amount, 0, gameMap)) {
+            return false;
+        }
+
+        hitbox.offset(amount, 0);
+        faceDir = amount > 0 ? GameConstants.Face_Dir.RIGHT : GameConstants.Face_Dir.LEFT;
+        return true;
+    }
+
+    private boolean moveVertical(float amount, GameMap gameMap) {
+        if (Math.abs(amount) < 0.01f || !HelpMethods.CanWalkHere(hitbox, 0, amount, gameMap)) {
+            return false;
+        }
+
+        hitbox.offset(0, amount);
+        faceDir = amount > 0 ? GameConstants.Face_Dir.DOWN : GameConstants.Face_Dir.UP;
+        return true;
+    }
+
+    private void moveAroundHorizontalObstacle(float step, GameMap gameMap) {
+        float verticalStep = obstacleDirection * step;
+        if (!moveVertical(verticalStep, gameMap)) {
+            obstacleDirection *= -1;
+            moveVertical(-verticalStep, gameMap);
+        }
+    }
+
+    private void moveAroundVerticalObstacle(float step, GameMap gameMap) {
+        float horizontalStep = obstacleDirection * step;
+        if (!moveHorizontal(horizontalStep, gameMap)) {
+            obstacleDirection *= -1;
+            moveHorizontal(-horizontalStep, gameMap);
         }
     }
 

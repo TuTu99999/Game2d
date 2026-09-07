@@ -19,7 +19,8 @@ import static com.tutorial.androidgametutorial.main.MainActivity.GAME_WIDTH;
 public class WinScreen extends BaseState implements GameStateInterface {
 
     private CustomButton playAgainButton, menuButton, leaderboardButton;
-    private Paint titlePaint, statsPaint, buttonPaint;
+    private Paint titlePaint, statsPaint, mapPaint, buttonPaint;
+    private Paint newRecordPaint, recordPaint, borderPaint, buttonTextPaint;
     private int killCount = 0;
     private int bestKillCount = 0;
     private SharedPreferences sharedPrefs;
@@ -40,32 +41,61 @@ public class WinScreen extends BaseState implements GameStateInterface {
     }
 
     private void initButtons() {
-        float buttonWidth = 200;
-        float buttonHeight = 80;
+        float buttonWidth = Math.min(320, GAME_WIDTH * 0.32f);
+        float buttonHeight = Math.min(76, GAME_HEIGHT * 0.08f);
         float centerX = GAME_WIDTH / 2f;
-        float centerY = GAME_HEIGHT / 2f;
+        float startY = GAME_HEIGHT * 0.62f;
+        float buttonGap = buttonHeight + GAME_HEIGHT * 0.02f;
 
-        playAgainButton = new CustomButton(centerX - buttonWidth / 2, centerY + 100, buttonWidth, buttonHeight);
-        menuButton = new CustomButton(centerX - buttonWidth / 2, centerY + 200, buttonWidth, buttonHeight);
-        leaderboardButton = new CustomButton(centerX - buttonWidth / 2, centerY + 300, buttonWidth, buttonHeight);
+        playAgainButton = new CustomButton(centerX - buttonWidth / 2, startY, buttonWidth, buttonHeight);
+        menuButton = new CustomButton(centerX - buttonWidth / 2, startY + buttonGap, buttonWidth, buttonHeight);
+        leaderboardButton = new CustomButton(centerX - buttonWidth / 2, startY + buttonGap * 2, buttonWidth, buttonHeight);
     }
 
     private void initPaints() {
+        float textScale = GAME_HEIGHT / 1080f;
+
         titlePaint = new Paint();
-        titlePaint.setColor(Color.YELLOW);
-        titlePaint.setTextSize(80);
+        titlePaint.setColor(Color.rgb(255, 215, 64));
+        titlePaint.setTextSize(Math.max(36, 64 * textScale));
         titlePaint.setFakeBoldText(true);
         titlePaint.setTextAlign(Paint.Align.CENTER);
 
         statsPaint = new Paint();
         statsPaint.setColor(Color.WHITE);
-        statsPaint.setTextSize(40);
-        statsPaint.setFakeBoldText(true);
+        statsPaint.setTextSize(Math.max(18, 30 * textScale));
         statsPaint.setTextAlign(Paint.Align.CENTER);
+
+        mapPaint = new Paint(statsPaint);
+        mapPaint.setTextAlign(Paint.Align.LEFT);
 
         buttonPaint = new Paint();
         buttonPaint.setColor(Color.GREEN);
         buttonPaint.setStyle(Paint.Style.FILL);
+
+        newRecordPaint = new Paint();
+        newRecordPaint.setColor(Color.rgb(255, 215, 0));
+        newRecordPaint.setTextSize(Math.max(24, 40 * textScale));
+        newRecordPaint.setFakeBoldText(true);
+        newRecordPaint.setTextAlign(Paint.Align.CENTER);
+
+        recordPaint = new Paint();
+        recordPaint.setColor(Color.rgb(98, 214, 255));
+        recordPaint.setTextSize(Math.max(20, 32 * textScale));
+        recordPaint.setFakeBoldText(true);
+        recordPaint.setTextAlign(Paint.Align.CENTER);
+
+        borderPaint = new Paint();
+        borderPaint.setColor(Color.rgb(255, 215, 64));
+        borderPaint.setStyle(Paint.Style.STROKE);
+        borderPaint.setStrokeWidth(3);
+
+        buttonTextPaint = new Paint();
+        buttonTextPaint.setColor(Color.WHITE);
+        buttonTextPaint.setTextSize(Math.max(18, 28 * textScale));
+        buttonTextPaint.setFakeBoldText(true);
+        buttonTextPaint.setTextAlign(Paint.Align.CENTER);
+
     }
 
     @Override
@@ -75,77 +105,75 @@ public class WinScreen extends BaseState implements GameStateInterface {
 
     @Override
     public void render(Canvas c) {
-        // Draw background
-        c.drawColor(Color.BLACK);
+        c.drawColor(Color.rgb(8, 12, 24));
 
-        // Draw victory title với hiệu ứng kỷ lục mới
+        float centerX = GAME_WIDTH / 2f;
+
         if (isNewRecord) {
-            Paint newRecordPaint = new Paint();
-            newRecordPaint.setColor(Color.rgb(255, 215, 0)); // Gold color
-            newRecordPaint.setTextSize(90);
-            newRecordPaint.setFakeBoldText(true);
-            newRecordPaint.setTextAlign(Paint.Align.CENTER);
-            c.drawText("🎉 KỶ LỤC MỚI! 🎉", GAME_WIDTH / 2f, GAME_HEIGHT / 2f - 200, newRecordPaint);
+            c.drawText(game.text("NEW RECORD!", "KỶ LỤC MỚI!"),
+                    centerX, GAME_HEIGHT * 0.07f, newRecordPaint);
         }
 
-        c.drawText("🏆 CHIẾN THẮNG! 🏆", GAME_WIDTH / 2f, GAME_HEIGHT / 2f - 150, titlePaint);
+        c.drawText(game.text("VICTORY", "CHIẾN THẮNG"),
+                centerX, GAME_HEIGHT * 0.16f, titlePaint);
+        boolean hardMode = game.getCurrentDifficulty() == Game.Difficulty.HARD;
+        c.drawText(
+                hardMode
+                        ? game.text("You conquered all four maps!", "Bạn đã chinh phục cả bốn màn!")
+                        : game.text("You survived all three maps!", "Bạn đã sống sót qua cả ba màn!"),
+                centerX,
+                GAME_HEIGHT * 0.23f,
+                statsPaint
+        );
 
-        // Draw stats - cập nhật để hiển thị hoàn thành 3 maps
-        c.drawText("Bạn đã sống sót qua cả 3 maps!", GAME_WIDTH / 2f, GAME_HEIGHT / 2f - 100, statsPaint);
-        c.drawText("🗺️ Map 1 (Outdoor) ✅", GAME_WIDTH / 2f, GAME_HEIGHT / 2f - 70, statsPaint);
-        c.drawText("🏔️ Map 2 (Snow) ✅", GAME_WIDTH / 2f, GAME_HEIGHT / 2f - 40, statsPaint);
-        c.drawText("🏜️ Map 3 (Desert) ✅", GAME_WIDTH / 2f, GAME_HEIGHT / 2f - 10, statsPaint);
-        c.drawText("Tổng quái tiêu diệt: " + killCount + " 👹", GAME_WIDTH / 2f, GAME_HEIGHT / 2f + 20, statsPaint);
-
-        // Hiển thị kỷ lục cao nhất - sử dụng giá trị trực tiếp từ LeaderboardManager
-        Paint recordPaint = new Paint();
-        recordPaint.setColor(Color.YELLOW);
-        recordPaint.setTextSize(35);
-        recordPaint.setFakeBoldText(true);
-        recordPaint.setTextAlign(Paint.Align.CENTER);
+        String map1Line = game.text(
+                "MAP 1  -  OUTDOOR  -  COMPLETE",
+                "MÀN 1  -  ĐỒNG CỎ  -  HOÀN THÀNH");
+        String map2Line = game.text(
+                "MAP 2  -  SNOW  -  COMPLETE",
+                "MÀN 2  -  TUYẾT  -  HOÀN THÀNH");
+        String map3Line = game.text(
+                "MAP 3  -  DESERT  -  COMPLETE",
+                "MÀN 3  -  SA MẠC  -  HOÀN THÀNH");
+        String map4Line = game.text(
+                "MAP 4  -  SHADOW REALM  -  COMPLETE",
+                "MÀN 4  -  CÕI BÓNG TỐI  -  HOÀN THÀNH");
+        String longestMapLine = hardMode ? map4Line : map3Line;
+        float mapLeft = centerX - mapPaint.measureText(longestMapLine) / 2f;
+        c.drawText(map1Line, mapLeft, GAME_HEIGHT * 0.32f, mapPaint);
+        c.drawText(map2Line, mapLeft, GAME_HEIGHT * 0.365f, mapPaint);
+        c.drawText(map3Line, mapLeft, GAME_HEIGHT * 0.41f, mapPaint);
+        if (hardMode) {
+            c.drawText(map4Line,
+                    mapLeft, GAME_HEIGHT * 0.445f, mapPaint);
+        }
+        c.drawText(game.text("TOTAL ENEMIES DEFEATED: ", "TỔNG QUÁI ĐÃ HẠ: ")
+                        + killCount,
+                centerX, GAME_HEIGHT * 0.475f, recordPaint);
 
         int bestScore = leaderboardManager.getBestScore();
-        c.drawText("🥇 KỶ LỤC CÁ NHÂN: " + bestScore + " quái", GAME_WIDTH / 2f, GAME_HEIGHT / 2f + 50, recordPaint);
+        c.drawText(game.text("PERSONAL BEST: ", "KỶ LỤC CÁ NHÂN: ")
+                        + bestScore,
+                centerX, GAME_HEIGHT * 0.525f, statsPaint);
 
-        // Debug info (có thể bỏ sau khi test xong)
-        Paint debugPaint = new Paint();
-        debugPaint.setColor(Color.CYAN);
-        debugPaint.setTextSize(20);
-        debugPaint.setTextAlign(Paint.Align.LEFT);
-        c.drawText("Debug: killCount=" + killCount + ", bestScore=" + bestScore, 50, 50, debugPaint);
-
-        // Draw buttons
-        drawButton(c, playAgainButton, "CHƠI LẠI", Color.GREEN);
-        drawButton(c, menuButton, "MENU CHÍNH", Color.BLUE);
-        drawButton(c, leaderboardButton, "BẢNG XẾP HẠNG", Color.MAGENTA);
+        drawButton(c, playAgainButton, game.text("PLAY AGAIN", "CHƠI LẠI"));
+        drawButton(c, menuButton, game.text("MAIN MENU", "MENU CHÍNH"));
+        drawButton(c, leaderboardButton, game.text("LEADERBOARD", "BẢNG XẾP HẠNG"));
     }
 
-    private void drawButton(Canvas c, CustomButton button, String text, int color) {
+    private void drawButton(Canvas c, CustomButton button, String text) {
         RectF buttonRect = button.getHitbox();
 
-        // Draw button background
-        Paint bgPaint = new Paint();
-        bgPaint.setColor(color);
-        bgPaint.setStyle(Paint.Style.FILL);
-        c.drawRect(buttonRect, bgPaint);
+        buttonPaint.setColor(Color.rgb(31, 78, 121));
+        c.drawRect(buttonRect, buttonPaint);
 
         // Draw button border
-        Paint borderPaint = new Paint();
-        borderPaint.setColor(Color.WHITE);
-        borderPaint.setStyle(Paint.Style.STROKE);
-        borderPaint.setStrokeWidth(3);
         c.drawRect(buttonRect, borderPaint);
 
         // Draw button text
-        Paint textPaint = new Paint();
-        textPaint.setColor(Color.BLACK);
-        textPaint.setTextSize(30);
-        textPaint.setFakeBoldText(true);
-        textPaint.setTextAlign(Paint.Align.CENTER);
-
         float textX = buttonRect.centerX();
-        float textY = buttonRect.centerY() + 10; // Offset for better centering
-        c.drawText(text, textX, textY, textPaint);
+        float textY = buttonRect.centerY() - (buttonTextPaint.ascent() + buttonTextPaint.descent()) / 2;
+        c.drawText(text, textX, textY, buttonTextPaint);
     }
 
     @Override

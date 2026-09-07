@@ -1,16 +1,16 @@
 package com.tutorial.androidgametutorial.entities;
 
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 
 import com.tutorial.androidgametutorial.main.MainActivity;
 import com.tutorial.androidgametutorial.R;
 import com.tutorial.androidgametutorial.helpers.GameConstants;
+import com.tutorial.androidgametutorial.helpers.BitmapCache;
 import com.tutorial.androidgametutorial.helpers.interfaces.BitmapMethods;
 
 public class BoomSprites implements BitmapMethods {
     
-    private Bitmap[] moveSprites = new Bitmap[4]; // boom_front, boom_left, boom_right, boom_behind
+    private Bitmap[] moveSprites = new Bitmap[4]; // down, up, left, right
     private Bitmap[] explosionSprites = new Bitmap[7]; // boom_smile, boom_bum, boom_bum_2, ..., boom_bum_6
     
     public BoomSprites() {
@@ -21,27 +21,21 @@ public class BoomSprites implements BitmapMethods {
     private void loadMoveSprites() {
         int[] moveResIds = {
             R.drawable.boom_front,
-            R.drawable.boom_left, 
-            R.drawable.boom_right,
-            R.drawable.boom_behind
+            R.drawable.boom_behind,
+            R.drawable.boom_left,
+            R.drawable.boom_right
         };
         
         for (int i = 0; i < moveSprites.length; i++) {
-            options.inScaled = false;
-            Bitmap original = BitmapFactory.decodeResource(
-                MainActivity.getGameContext().getResources(), 
-                moveResIds[i], 
-                options
+            moveSprites[i] = BitmapCache.getScaled(
+                    MainActivity.getGameContext(), moveResIds[i],
+                    GameConstants.Sprite.SIZE, GameConstants.Sprite.SIZE, false
             );
-            // Scale trực tiếp từ kích thước gốc lên kích thước game (96x96)
-            moveSprites[i] = Bitmap.createScaledBitmap(original, 
-                GameConstants.Sprite.SIZE, 
-                GameConstants.Sprite.SIZE, 
-                false);
         }
     }
     
     private void loadExplosionSprites() {
+        int explosionSize = Math.round(GameConstants.Sprite.SIZE * 1.2f);
         int[] explosionResIds = {
             R.drawable.boom_smile,
             R.drawable.boom_bum,
@@ -53,17 +47,10 @@ public class BoomSprites implements BitmapMethods {
         };
         
         for (int i = 0; i < explosionSprites.length; i++) {
-            options.inScaled = false;
-            Bitmap original = BitmapFactory.decodeResource(
-                MainActivity.getGameContext().getResources(), 
-                explosionResIds[i], 
-                options
+            explosionSprites[i] = BitmapCache.getScaled(
+                    MainActivity.getGameContext(), explosionResIds[i],
+                    explosionSize, explosionSize, false
             );
-            // Scale trực tiếp từ kích thước gốc lên kích thước game (96x96)
-            explosionSprites[i] = Bitmap.createScaledBitmap(original, 
-                GameConstants.Sprite.SIZE, 
-                GameConstants.Sprite.SIZE, 
-                false);
         }
     }
     

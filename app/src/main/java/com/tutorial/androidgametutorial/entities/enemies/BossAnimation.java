@@ -1,78 +1,61 @@
 package com.tutorial.androidgametutorial.entities.enemies;
 
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 
 import com.tutorial.androidgametutorial.R;
-import com.tutorial.androidgametutorial.helpers.GameConstants;
-import com.tutorial.androidgametutorial.helpers.interfaces.BitmapMethods;
-import com.tutorial.androidgametutorial.main.MainActivity;
 
-public enum BossAnimation implements BitmapMethods {
+/** Boss map 3 dÃ¹ng 4 cá»™t: down, up, left, right. */
+public enum BossAnimation {
 
-    BOSS_IDLE(R.drawable.boss_dungyen, 1, 6),
-    BOSS_WALK(R.drawable.bosswalk, 1, 6),
-    BOSS_PREPARE_ATTACK_LEFT(R.drawable.bosspreviewattackleft, 1, 3),
-    BOSS_PREPARE_ATTACK_RIGHT(R.drawable.bosspreviewattackright, 1, 3),
-    BOSS_ATTACK_LEFT(R.drawable.bossattackleft, 1, 4),
-    BOSS_ATTACK_RIGHT(R.drawable.bossattackright, 1, 4);
+    IDLE(R.drawable.boss3_walk_8x4, 10, 0, 1),
+    WALK(R.drawable.boss3_walk_8x4, 10, 0, 8),
+    PREPARE_ATTACK(R.drawable.boss3_attack_8x4, 8, 0, 1),
+    ATTACK(R.drawable.boss3_attack_8x4, 8, 0, 8),
+    HURT(R.drawable.boss3_walk_8x4, 10, 0, 1),
+    DEAD(R.drawable.boss3_death_8x4, 8, 0, 8);
 
-    private final Bitmap[][] sprites;
-    private final int rows;
-    private final int cols;
-    private final Bitmap spriteSheet;
+    private final int resourceId;
+    private final int sheetRows;
+    private final int startRow;
+    private final int frameCount;
+    private volatile Bitmap[][] sprites;
 
-    BossAnimation(int resID, int rows, int cols) {
-        this.rows = rows;
-        this.cols = cols;
+    BossAnimation(int resourceId, int sheetRows, int startRow, int frameCount) {
+        this.resourceId = resourceId;
+        this.sheetRows = sheetRows;
+        this.startRow = startRow;
+        this.frameCount = frameCount;
+    }
 
-        BitmapFactory.Options options = new BitmapFactory.Options();
-        options.inScaled = false;
+    public Bitmap[][] getSprites() {
+        ensureLoaded();
+        return sprites;
+    }
 
-        spriteSheet = BitmapFactory.decodeResource(
-                MainActivity.getGameContext().getResources(),
-                resID,
-                options
-        );
+    private void ensureLoaded() {
+        if (sprites != null) return;
+        synchronized (this) {
+            if (sprites != null) return;
 
-        sprites = new Bitmap[rows][cols];
-        for (int j = 0; j < rows; j++) {
-            for (int i = 0; i < cols; i++) {
-                // getScaledBitmap(...) giả sử là method từ BitmapMethods (do project đã dùng trước đó)
-                sprites[j][i] = getScaledBitmap(Bitmap.createBitmap(
-                        spriteSheet,
-                        GameConstants.Sprite.DEFAULT_SIZE * i,
-                        GameConstants.Sprite.DEFAULT_SIZE * j,
-                        GameConstants.Sprite.DEFAULT_SIZE,
-                        GameConstants.Sprite.DEFAULT_SIZE
-                ));
+            // Idle/hurt and prepare reuse frames already owned by the complete
+            // walk/attack animations instead of decoding the same sheet again.
+            if (this == IDLE || this == HURT) {
+                sprites = firstFrameOf(WALK.getSprites());
+            } else if (this == PREPARE_ATTACK) {
+                sprites = firstFrameOf(ATTACK.getSprites());
+            } else {
+                sprites = DirectionalSpriteLoader.load(
+                        resourceId, sheetRows, startRow, frameCount, true
+                );
             }
         }
     }
 
-    /**
-     * Trả về toàn bộ mảng sprites (rows x cols).
-     */
-    public Bitmap[][] getSprites() {
-        return sprites;
-    }
-
-    /**
-     * Trả về 1 frame cụ thể (hàm tên giống GameCharacters để đồng nhất).
-     */
-    public Bitmap getSprite(int row, int col) {
-        return sprites[row][col];
-    }
-
-    public Bitmap getSprites(int y, int x) {
-        return getSprite(y, x);
-    }
-
-    public int getCols() {
-        return cols;
-    }
-
-    public int getRows() {
-        return rows;
+    private static Bitmap[][] firstFrameOf(Bitmap[][] source) {
+        Bitmap[][] result = new Bitmap[source.length][1];
+        for (int direction = 0; direction < source.length; direction++) {
+            result[direction][0] = source[direction][0];
+        }
+        return result;
     }
 }

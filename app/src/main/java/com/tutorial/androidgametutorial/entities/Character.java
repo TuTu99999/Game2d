@@ -10,6 +10,7 @@ import android.graphics.RectF;
 import com.tutorial.androidgametutorial.helpers.GameConstants;
 
 public abstract class Character extends Entity {
+    private static final long ATTACK_ANIMATION_DURATION = 360L;
     protected int aniTick, aniIndex;
     protected int faceDir = GameConstants.Face_Dir.DOWN;
     protected final GameCharacters gameCharType;
@@ -41,6 +42,16 @@ public abstract class Character extends Entity {
     public void damageCharacter(int damage) {
         this.currentHealth -= damage;
     }
+
+    public boolean canSpendHealth(int amount) {
+        return amount <= 0 || currentHealth > amount;
+    }
+
+    public boolean spendHealth(int amount) {
+        if (!canSpendHealth(amount)) return false;
+        currentHealth -= Math.max(0, amount);
+        return true;
+    }
     
     public void healCharacter(int healAmount) {
         this.currentHealth += healAmount;
@@ -51,25 +62,38 @@ public abstract class Character extends Entity {
 
     private int setAttackDamage() {
         return switch (gameCharType) {
-            case PLAYER -> 10;
+            case PLAYER, ADVENTURER, WARRIOR, ROGUE, GUARDIAN -> 10;
             case SKELETON -> 25;
             case BOOM -> 100;
         };
     }
 
     protected void updateAnimation() {
+        updateAnimation(GameConstants.Animation.SPEED);
+    }
+
+    protected void updateAnimation(int animationSpeed) {
         aniTick++;
-        if (aniTick >= GameConstants.Animation.SPEED) {
+        if (aniTick >= Math.max(1, animationSpeed)) {
             aniTick = 0;
             aniIndex++;
             if (aniIndex >= GameConstants.Animation.AMOUNT)
                 aniIndex = 0;
         }
-        
-        // Tự động set attacking = false sau 2000ms (đủ thời gian để checkPlayerAttack)
-        if (attacking && System.currentTimeMillis() - lastAttackTime >= 2000) {
+    }
+
+    protected void updateAttackState() {
+        if (attacking
+                && System.currentTimeMillis() - lastAttackTime >= ATTACK_ANIMATION_DURATION) {
             setAttacking(false);
         }
+    }
+
+    public float getAttackAnimationProgress() {
+        if (!attacking) return 1f;
+        float progress = (System.currentTimeMillis() - lastAttackTime)
+                / (float) ATTACK_ANIMATION_DURATION;
+        return Math.max(0f, Math.min(1f, progress));
     }
 
     public void resetAnimation() {
@@ -185,6 +209,7 @@ public abstract class Character extends Entity {
         this.attacking = attacking;
         if (attacking) {
             lastAttackTime = System.currentTimeMillis();
+            attackChecked = false;
         } else {
             attackChecked = false;
         }

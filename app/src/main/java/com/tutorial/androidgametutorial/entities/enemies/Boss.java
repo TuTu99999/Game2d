@@ -2,212 +2,300 @@ package com.tutorial.androidgametutorial.entities.enemies;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.PointF;
 import android.graphics.RectF;
 
-// Chúng ta cần import lớp Player để Boss có thể tấn công người chơi
 import com.tutorial.androidgametutorial.entities.Player;
+import com.tutorial.androidgametutorial.environments.GameMap;
+import com.tutorial.androidgametutorial.helpers.GameConstants;
+import com.tutorial.androidgametutorial.helpers.HelpMethods;
 
 public class Boss {
 
-    private PointF position;
+    public static final float ATTACK_START_RANGE = 145f;
+    public static final float DRAW_WIDTH = 180f;
+    public static final float DRAW_HEIGHT = 150f;
+    private static final float DRAW_SCALE = 1.3f;
+    private static final float ATTACK_HIT_RANGE = 175f;
+    private static final long PREPARE_DURATION = 250L;
+    private static final long HURT_DURATION = 240L;
+    private static final long WALK_FRAME_DURATION = 90L;
+    private static final long ATTACK_FRAME_DURATION = 105L;
+    private static final long DEATH_FRAME_DURATION = 220L;
+    private static final int[] DOWN_ATTACK_FRAME_ORDER = {0, 0, 0, 3, 4, 5, 6, 7};
+
+    private final PointF position;
+    private final RectF hitbox;
+    private final Paint spritePaint = new Paint();
+
     private float speed = 2.0f;
+    private int obstacleDirection = 1;
+    private int faceDir = GameConstants.Face_Dir.DOWN;
 
     private Bitmap[][] currentSprites;
-    private int currentFrame = 0;
-    private long lastFrameTime = 0L;
-    private long frameDuration = 120L; // Tốc độ hoạt ảnh (ms trên mỗi frame)
+    private int currentFrame;
+    private long lastFrameTime;
+    private long stateStartTime;
+    private BossState state;
 
-    private BossState state = BossState.IDLE;
-    private boolean facingRight = true;
-
-    // Thời gian cho các trạng thái
-    private long stateStartTime = 0L;
-    private long prepareDuration = 600L; // Thời gian chuẩn bị tấn công
-    private long attackDuration = 800L;  // Thời gian thực hiện đòn tấn công
-
-    // --- CÁC THUỘC TÍNH MỚI CHO VIỆC TẤN CÔNG ---
-    private int attackDamage;
-    private RectF attackBox;
-    private boolean attackChecked; // Dùng để đảm bảo chỉ gây sát thương một lần mỗi đòn
+    private int attackDamage = 35;
+    private int maxHealth = 200;
+    private int currentHealth = 200;
+    private boolean attackChecked;
+    private boolean active = true;
+    private boolean deathAnimationFinished;
+    private boolean animationFinished;
 
     public Boss(PointF position) {
-        this.position = position;
+        this.position = new PointF(position.x, position.y);
+        hitbox = new RectF(
+                position.x + 18f,
+                position.y + 48f,
+                position.x + 78f,
+                position.y + 94f
+        );
+        spritePaint.setFilterBitmap(false);
         setState(BossState.IDLE);
-        lastFrameTime = System.currentTimeMillis();
-        stateStartTime = lastFrameTime;
-
-        // Khởi tạo giá trị sát thương và vùng tấn công
-        this.attackDamage = 35; // Boss gây 35 sát thương mỗi đòn
-        this.attackBox = new RectF();
     }
 
-    private void setAnimation(BossAnimation anim) {
-        if (anim == null) return;
-        currentSprites = anim.getSprites(); //
-        currentFrame = 0;
-        lastFrameTime = System.currentTimeMillis();
+    public void applyDifficulty(boolean hardMode) {
+        // Táº¡m thá»i Ä‘á»ƒ Hard cÃ³ sá»©c máº¡nh ngang Easy, nhÆ°ng váº«n má»Ÿ map 4.
+        attackDamage = 35;
+        maxHealth = 200;
+        currentHealth = maxHealth;
+        active = true;
+        deathAnimationFinished = false;
     }
 
-    /**
-     * Cập nhật trạng thái của Boss.
-     * Phương thức này cần được gọi liên tục trong vòng lặp game.
-     * @param nowMillis Thời gian hiện tại.
-     * @param targetPlayer Đối tượng người chơi để Boss tấn công.
-     */
-    public void update(long nowMillis, Player targetPlayer) {
-        // Cập nhật frame của hoạt ảnh
-        if (currentSprites != null && currentSprites.length > 0) {
-            int frameCount = currentSprites[0].length;
-            if (frameCount > 0 && nowMillis - lastFrameTime > frameDuration) {
-                currentFrame = (currentFrame + 1) % frameCount;
-                lastFrameTime = nowMillis;
-            }
-        }
+    public void update(long nowMillis, Player targetPlayer, float cameraX, float cameraY) {
+        updateAnimation(nowMillis);
+        if (state == BossState.DEAD || !active) return;
 
-        // Xử lý logic theo từng trạng thái của Boss
         switch (state) {
-            case WALK:
-                move();
-                break;
-
-            case PREPARE_ATTACK_LEFT:
-            case PREPARE_ATTACK_RIGHT:
-                // Nếu hết thời gian chuẩn bị, chuyển sang tấn công
-                if (nowMillis - stateStartTime >= prepareDuration) {
-                    if (state == BossState.PREPARE_ATTACK_LEFT) setState(BossState.ATTACK_LEFT);
-                    else setState(BossState.ATTACK_RIGHT);
+            case PREPARE_ATTACK -> {
+                if (nowMillis - stateStartTime >= PREPARE_DURATION) {
+                    setState(BossState.ATTACK);
                 }
-                break;
-
-            case ATTACK_LEFT:
-            case ATTACK_RIGHT:
-                // Nếu hết thời gian tấn công, quay về trạng thái đứng yên
-                if (nowMillis - stateStartTime >= attackDuration) {
+            }
+            case ATTACK -> {
+                performAttack(targetPlayer, cameraX, cameraY);
+                if (animationFinished) {
                     setState(BossState.IDLE);
-                } else {
-                    // Thực hiện logic tấn công
-                    performAttack(targetPlayer);
                 }
-                break;
-
-            case IDLE:
-            default:
-                // Đứng yên, có thể thêm logic để Boss tự di chuyển hoặc tấn công sau một khoảng thời gian
-                break;
-        }
-    }
-
-    private void move() {
-        if (facingRight) position.x += speed;
-        else position.x -= speed;
-    }
-
-    /**
-     * Thực hiện logic tấn công, kiểm tra va chạm và gây sát thương.
-     * @param targetPlayer Người chơi là mục tiêu.
-     */
-    private void performAttack(Player targetPlayer) {
-        // Hoạt ảnh tấn công có 4 frame (từ 0 đến 3).
-        // Chúng ta chỉ kiểm tra gây sát thương tại frame thứ 3 (index = 2) - là frame vung vũ khí mạnh nhất.
-        // Biến `attackChecked` đảm bảo sát thương chỉ được tính 1 lần.
-        if (!attackChecked && currentFrame == 2) {
-            attackChecked = true;
-            updateAttackBox();
-
-            // Kiểm tra nếu hitbox của người chơi giao với vùng tấn công của Boss
-            if (RectF.intersects(attackBox, targetPlayer.getHitbox())) {
-                // Trừ máu người chơi bằng phương thức từ lớp cha Character
-                targetPlayer.damageCharacter(attackDamage);
+            }
+            case HURT -> {
+                if (nowMillis - stateStartTime >= HURT_DURATION) {
+                    setState(BossState.IDLE);
+                }
+            }
+            default -> {
+                // IDLE và WALK được điều khiển trong Playing.
             }
         }
     }
 
-    /**
-     * Cập nhật vị trí và kích thước của vùng tấn công (hitbox) dựa trên hướng của Boss.
-     */
-    private void updateAttackBox() {
-        float attackRangeX = 120f; // Tầm tấn công theo chiều ngang
-        float attackBoxHeight = 150f; // Chiều cao của vùng tấn công
-        float yOffset = 20f; // Chỉnh vị trí của vùng tấn công theo chiều dọc
+    private void updateAnimation(long nowMillis) {
+        if (currentSprites == null || currentSprites.length == 0) return;
+        Bitmap[] frames = currentSprites[Math.max(0, Math.min(3, faceDir))];
+        long frameDuration = getFrameDuration();
+        if (frames.length == 0 || nowMillis - lastFrameTime < frameDuration) return;
 
-        if (facingRight) {
-            // Vùng tấn công bên phải của Boss
-            attackBox.set(position.x + 80, position.y + yOffset, position.x + 80 + attackRangeX, position.y + yOffset + attackBoxHeight);
+        if (currentFrame < frames.length - 1) {
+            currentFrame++;
+        } else if (state == BossState.DEAD) {
+            // Chá»‰ bÃ¡o cháº¿t xong sau khi frame cuá»‘i Ä‘Ã£ hiá»‡n Ä‘á»§ má»™t nhá»‹p.
+            deathAnimationFinished = true;
+        } else if (state == BossState.PREPARE_ATTACK
+                || state == BossState.ATTACK
+                || state == BossState.HURT) {
+            animationFinished = true;
         } else {
-            // Vùng tấn công bên trái của Boss
-            attackBox.set(position.x - attackRangeX, position.y + yOffset, position.x, position.y + yOffset + attackBoxHeight);
+            currentFrame = 0;
+        }
+        lastFrameTime = nowMillis;
+    }
+
+    private long getFrameDuration() {
+        return switch (state) {
+            case WALK -> WALK_FRAME_DURATION;
+            case ATTACK -> ATTACK_FRAME_DURATION;
+            case DEAD -> DEATH_FRAME_DURATION;
+            case HURT -> 150L;
+            default -> 180L;
+        };
+    }
+
+    public void startAttackToward(float targetX, float targetY) {
+        if (!active || (state != BossState.IDLE && state != BossState.WALK)) return;
+        updateFaceDirection(targetX - hitbox.centerX(), targetY - hitbox.centerY());
+        setState(BossState.PREPARE_ATTACK);
+    }
+
+    public void moveToward(float targetX, float targetY, GameMap gameMap) {
+        if (!active || (state != BossState.IDLE && state != BossState.WALK)) return;
+
+        float distanceX = targetX - hitbox.centerX();
+        float distanceY = targetY - hitbox.centerY();
+        float distance = (float) Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+        if (distance < 1f) return;
+
+        setState(BossState.WALK);
+        updateFaceDirection(distanceX, distanceY);
+        float moveX = distanceX / distance * speed;
+        float moveY = distanceY / distance * speed;
+
+        if (Math.abs(distanceX) > Math.abs(distanceY)) {
+            if (!tryMove(moveX, 0f, gameMap) && !tryMove(0f, moveY, gameMap)) {
+                moveAroundObstacle(false, gameMap);
+            }
+        } else if (!tryMove(0f, moveY, gameMap) && !tryMove(moveX, 0f, gameMap)) {
+            moveAroundObstacle(true, gameMap);
         }
     }
 
-    /**
-     * Vẽ Boss lên màn hình.
-     * @param canvas Đối tượng Canvas để vẽ.
-     */
-    public void draw(Canvas canvas, float cameraX, float cameraY) {
-        if (currentSprites == null) return;
-        Bitmap frame = null;
-        int row = 0;
-        int cols = currentSprites[row].length;
-        int index = (cols == 0) ? 0 : (currentFrame % cols);
-        frame = currentSprites[row][index];
+    private boolean tryMove(float moveX, float moveY, GameMap gameMap) {
+        if (Math.abs(moveX) < 0.01f && Math.abs(moveY) < 0.01f) return false;
+        if (!HelpMethods.CanWalkHere(hitbox, moveX, moveY, gameMap)) return false;
 
-        if (frame != null) {
-            canvas.drawBitmap(frame, position.x + cameraX, position.y + cameraY, null);
+        updateFaceDirection(moveX, moveY);
+        position.offset(moveX, moveY);
+        hitbox.offset(moveX, moveY);
+        return true;
+    }
+
+    private void moveAroundObstacle(boolean horizontal, GameMap gameMap) {
+        float moveX = horizontal ? obstacleDirection * speed : 0f;
+        float moveY = horizontal ? 0f : obstacleDirection * speed;
+        if (!tryMove(moveX, moveY, gameMap)) {
+            obstacleDirection *= -1;
+            tryMove(-moveX, -moveY, gameMap);
         }
+    }
+
+    private void updateFaceDirection(float dx, float dy) {
+        if (Math.abs(dx) > Math.abs(dy)) {
+            faceDir = dx < 0f
+                    ? GameConstants.Face_Dir.LEFT
+                    : GameConstants.Face_Dir.RIGHT;
+        } else {
+            faceDir = dy < 0f
+                    ? GameConstants.Face_Dir.UP
+                    : GameConstants.Face_Dir.DOWN;
+        }
+    }
+
+    private void performAttack(Player targetPlayer, float cameraX, float cameraY) {
+        boolean attackMomentReached = currentFrame >= 4;
+        if (attackChecked || !attackMomentReached) return;
+
+        attackChecked = true;
+        float playerWorldX = targetPlayer.getHitbox().centerX() - cameraX;
+        float playerWorldY = targetPlayer.getHitbox().centerY() - cameraY;
+        float dx = playerWorldX - hitbox.centerX();
+        float dy = playerWorldY - hitbox.centerY();
+        if (dx * dx + dy * dy <= ATTACK_HIT_RANGE * ATTACK_HIT_RANGE) {
+            targetPlayer.damageCharacter(attackDamage);
+        }
+    }
+
+    public void draw(Canvas canvas, float cameraX, float cameraY) {
+        if (currentSprites == null || currentSprites.length == 0) return;
+        Bitmap[] frames = currentSprites[Math.max(0, Math.min(3, faceDir))];
+        if (frames.length == 0) return;
+        int renderFrame = Math.min(currentFrame, frames.length - 1);
+        if (state == BossState.ATTACK && faceDir == GameConstants.Face_Dir.DOWN) {
+            renderFrame = DOWN_ATTACK_FRAME_ORDER[Math.min(
+                    currentFrame, DOWN_ATTACK_FRAME_ORDER.length - 1)];
+        }
+        Bitmap frame = frames[Math.min(renderFrame, frames.length - 1)];
+        if (frame == null) return;
+
+        float centerX = hitbox.centerX() + cameraX;
+        float bottom = hitbox.bottom + cameraY + 4f;
+        float scale = Math.min(
+                DRAW_WIDTH * DRAW_SCALE / frame.getWidth(),
+                DRAW_HEIGHT * DRAW_SCALE / frame.getHeight()
+        );
+        float drawWidth = frame.getWidth() * scale;
+        float drawHeight = frame.getHeight() * scale;
+        RectF destination = new RectF(
+                centerX - drawWidth / 2f,
+                bottom - drawHeight,
+                centerX + drawWidth / 2f,
+                bottom
+        );
+
+        spritePaint.setAlpha(255);
+        if (state == BossState.HURT) {
+            destination.offset(currentFrame % 2 == 0 ? -5f : 5f, 0f);
+            spritePaint.setAlpha(175);
+        }
+        canvas.drawBitmap(frame, null, destination, spritePaint);
+        spritePaint.setAlpha(255);
     }
 
     public void setState(BossState newState) {
-        if (newState == null || state == newState) return;
-
+        if (newState == null || (state == newState && currentSprites != null)) return;
         state = newState;
         stateStartTime = System.currentTimeMillis();
 
         switch (newState) {
-            case IDLE:
-                setAnimation(BossAnimation.BOSS_IDLE);
-                break;
-            case WALK:
-                setAnimation(BossAnimation.BOSS_WALK);
-                break;
-            case PREPARE_ATTACK_LEFT:
-                setAnimation(BossAnimation.BOSS_PREPARE_ATTACK_LEFT);
-                facingRight = false;
-                break;
-            case PREPARE_ATTACK_RIGHT:
-                setAnimation(BossAnimation.BOSS_PREPARE_ATTACK_RIGHT);
-                facingRight = true;
-                break;
-            case ATTACK_LEFT:
-                setAnimation(BossAnimation.BOSS_ATTACK_LEFT);
-                facingRight = false;
-                attackChecked = false; // Reset lại cờ kiểm tra khi bắt đầu một đòn tấn công mới
-                break;
-            case ATTACK_RIGHT:
-                setAnimation(BossAnimation.BOSS_ATTACK_RIGHT);
-                facingRight = true;
-                attackChecked = false; // Reset lại cờ kiểm tra khi bắt đầu một đòn tấn công mới
-                break;
-            default:
-                setAnimation(BossAnimation.BOSS_IDLE);
-                break;
+            case IDLE -> setAnimation(BossAnimation.IDLE);
+            case WALK -> setAnimation(BossAnimation.WALK);
+            case PREPARE_ATTACK -> setAnimation(BossAnimation.PREPARE_ATTACK);
+            case ATTACK -> {
+                attackChecked = false;
+                setAnimation(BossAnimation.ATTACK);
+            }
+            case HURT -> setAnimation(BossAnimation.HURT);
+            case DEAD -> setAnimation(BossAnimation.DEAD);
         }
+    }
+
+    private void setAnimation(BossAnimation animation) {
+        currentSprites = animation.getSprites();
         currentFrame = 0;
+        animationFinished = false;
         lastFrameTime = System.currentTimeMillis();
     }
 
-    // Các phương thức getter/setter
-    public PointF getPosition() { return position; }
-    public BossState getState() { return state; }
-    public void setFacingRight(boolean facingRight) { this.facingRight = facingRight; }
-    public boolean isFacingRight() { return facingRight; }
-    public void setSpeed(float speed) { this.speed = speed; }
-
-    public Bitmap[][] getSprites() {
-        return currentSprites;
+    public void damage(int damage) {
+        if (!active) return;
+        currentHealth = Math.max(0, currentHealth - damage);
+        if (currentHealth == 0) {
+            active = false;
+            deathAnimationFinished = false;
+            setState(BossState.DEAD);
+        } else if (state == BossState.IDLE || state == BossState.WALK) {
+            setState(BossState.HURT);
+        }
     }
 
-    public int getCurrentFrame() {
-        return currentFrame;
+    public PointF getPosition() { return position; }
+    public RectF getHitbox() { return hitbox; }
+    public BossState getState() { return state; }
+    public int getMaxHealth() { return maxHealth; }
+    public int getCurrentHealth() { return currentHealth; }
+    public boolean isActive() { return active; }
+    public boolean isDeathAnimationFinished() { return deathAnimationFinished; }
+    public int getFaceDir() { return faceDir; }
+    public void setSpeed(float speed) { this.speed = speed; }
+    public Bitmap[][] getSprites() { return currentSprites; }
+    public int getCurrentFrame() { return currentFrame; }
+
+    public void shiftTimers(long pausedDuration) {
+        if (pausedDuration <= 0L) return;
+        lastFrameTime += pausedDuration;
+        stateStartTime += pausedDuration;
+    }
+
+    // Giữ API cũ để các đoạn code khác không bị ảnh hưởng.
+    public void setFacingRight(boolean facingRight) {
+        faceDir = facingRight ? GameConstants.Face_Dir.RIGHT : GameConstants.Face_Dir.LEFT;
+    }
+
+    public boolean isFacingRight() {
+        return faceDir == GameConstants.Face_Dir.RIGHT;
     }
 }

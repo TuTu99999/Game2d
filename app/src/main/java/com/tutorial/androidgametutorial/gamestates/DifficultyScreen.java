@@ -3,130 +3,112 @@ package com.tutorial.androidgametutorial.gamestates;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.view.MotionEvent;
 
 import com.tutorial.androidgametutorial.helpers.interfaces.GameStateInterface;
 import com.tutorial.androidgametutorial.main.Game;
 import com.tutorial.androidgametutorial.main.MainActivity;
-import com.tutorial.androidgametutorial.ui.ButtonImages;
 import com.tutorial.androidgametutorial.ui.CustomButton;
 import com.tutorial.androidgametutorial.ui.GameImages;
 
 public class DifficultyScreen extends BaseState implements GameStateInterface {
 
-    private CustomButton btnEasy, btnHard, btnBack;
+    private final CustomButton btnEasy;
+    private final CustomButton btnHard;
+    private final CustomButton btnBack;
+    private final Paint titlePaint = new Paint();
+    private final Paint buttonPaint = new Paint();
+    private final Paint selectedPaint = new Paint();
+    private final Paint borderPaint = new Paint();
+    private final Paint textPaint = new Paint();
 
-    private int menuX = MainActivity.GAME_WIDTH / 6;
-    private int menuY = 200;
-
-    private int btnEasyX = menuX + GameImages.MAINMENU_MENUBG.getImage().getWidth() / 2 - ButtonImages.DIFFICULTY_EASY.getWidth() / 2;
-    private int btnEasyY = menuY + 60;
-
-    private int btnHardX = menuX + GameImages.MAINMENU_MENUBG.getImage().getWidth() / 2 - ButtonImages.DIFFICULTY_HARD.getWidth() / 2;
-    private int btnHardY = btnEasyY + ButtonImages.DIFFICULTY_EASY.getHeight() + 20;
-
-    private int btnBackX = menuX + GameImages.MAINMENU_MENUBG.getImage().getWidth() / 2 - ButtonImages.BACK_BUTTON.getWidth() / 2;
-    private int btnBackY = btnHardY + 160;
+    private final int menuX = MainActivity.GAME_WIDTH / 6;
+    private final int menuY = 200;
+    private final int menuWidth = GameImages.MAINMENU_MENUBG.getImage().getWidth();
+    private final int buttonWidth = 300;
+    private final int buttonHeight = 100;
 
     public DifficultyScreen(Game game) {
         super(game);
-        btnEasy = new CustomButton(btnEasyX, btnEasyY, ButtonImages.DIFFICULTY_EASY.getWidth(), ButtonImages.DIFFICULTY_EASY.getHeight());
-        btnHard = new CustomButton(btnHardX, btnHardY, ButtonImages.DIFFICULTY_HARD.getWidth(), ButtonImages.DIFFICULTY_HARD.getHeight());
-        btnBack = new CustomButton(btnBackX, btnBackY, ButtonImages.BACK_BUTTON.getWidth(), ButtonImages.BACK_BUTTON.getHeight());
+        int buttonX = menuX + menuWidth / 2 - buttonWidth / 2;
+        int easyY = menuY + 145;
+        int hardY = easyY + 130;
+        int backY = hardY + 170;
+
+        btnEasy = new CustomButton(buttonX, easyY, buttonWidth, buttonHeight);
+        btnHard = new CustomButton(buttonX, hardY, buttonWidth, buttonHeight);
+        btnBack = new CustomButton(buttonX, backY, buttonWidth, buttonHeight);
+
+        titlePaint.setColor(Color.WHITE);
+        titlePaint.setTextSize(42f);
+        titlePaint.setTextAlign(Paint.Align.CENTER);
+        titlePaint.setTypeface(Typeface.DEFAULT_BOLD);
+        titlePaint.setAntiAlias(true);
+
+        buttonPaint.setColor(Color.rgb(38, 53, 94));
+        selectedPaint.setColor(Color.rgb(66, 102, 92));
+        borderPaint.setColor(Color.rgb(255, 205, 75));
+        borderPaint.setStyle(Paint.Style.STROKE);
+        borderPaint.setStrokeWidth(4f);
+        borderPaint.setAntiAlias(true);
+
+        textPaint.setColor(Color.WHITE);
+        textPaint.setTextSize(28f);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setTypeface(Typeface.DEFAULT_BOLD);
+        textPaint.setAntiAlias(true);
     }
 
     @Override
     public void update(double delta) {
-
     }
 
     @Override
-    public void render(Canvas c) {
-        // Vẽ background menu
-        c.drawBitmap(
-                GameImages.MAINMENU_MENUBG.getImage(),
-                menuX,
-                menuY,
-                null);
+    public void render(Canvas canvas) {
+        canvas.drawBitmap(GameImages.MAINMENU_MENUBG.getImage(), menuX, menuY, null);
+        canvas.drawText(game.text("CHOOSE DIFFICULTY", "CHỌN ĐỘ KHÓ"),
+                menuX + menuWidth / 2f, menuY + 85f, titlePaint);
+        drawButton(canvas, btnEasy, game.text("EASY", "DỄ"),
+                game.getCurrentDifficulty() == Game.Difficulty.EASY);
+        drawButton(canvas, btnHard, game.text("HARD", "KHÓ"),
+                game.getCurrentDifficulty() == Game.Difficulty.HARD);
+        drawButton(canvas, btnBack, game.text("BACK", "QUAY LẠI"), false);
+    }
 
-        // Vẽ title
-        Paint titlePaint = new Paint();
-        titlePaint.setColor(Color.WHITE);
-        titlePaint.setTextSize(36);
-        titlePaint.setFakeBoldText(true);
-        titlePaint.setTextAlign(Paint.Align.CENTER);
-
-        float titleX = MainActivity.GAME_WIDTH / 2f;
-        float titleY = menuY + 40;
-        c.drawText("CHỌN ĐỘ KHÓ", titleX, titleY, titlePaint);
-
-        // Vẽ nút Easy (icon character)
-        c.drawBitmap(
-                ButtonImages.DIFFICULTY_EASY.getBtnImg(btnEasy.isPushed()),
-                btnEasy.getHitbox().left,
-                btnEasy.getHitbox().top,
-                null);
-
-        // Vẽ nút Hard (icon skull)
-        c.drawBitmap(
-                ButtonImages.DIFFICULTY_HARD.getBtnImg(btnHard.isPushed()),
-                btnHard.getHitbox().left,
-                btnHard.getHitbox().top,
-                null);
-
-        // Vẽ nút Back
-        c.drawBitmap(
-                ButtonImages.BACK_BUTTON.getBtnImg(btnBack.isPushed()),
-                btnBack.getHitbox().left,
-                btnBack.getHitbox().top,
-                null);
-
-
-        // Vẽ mô tả độ khó
-        Paint descPaint = new Paint();
-        descPaint.setColor(Color.YELLOW);
-        descPaint.setTextSize(18);
-        descPaint.setTextAlign(Paint.Align.CENTER);
-
-        float descX = MainActivity.GAME_WIDTH / 2f;
-        c.drawText("DỄ: Quái không đuổi theo, ít máu, ít sát thương", descX, btnEasy.getHitbox().bottom + 30, descPaint);
-        c.drawText("KHÓ: Quái đuổi theo, nhiều máu, sát thương cao", descX, btnHard.getHitbox().bottom + 30, descPaint);
+    private void drawButton(Canvas canvas, CustomButton button,
+                            String label, boolean selected) {
+        RectF box = button.getHitbox();
+        canvas.drawRoundRect(box, 12f, 12f,
+                selected || button.isPushed() ? selectedPaint : buttonPaint);
+        canvas.drawRoundRect(box, 12f, 12f, borderPaint);
+        float y = box.centerY() - (textPaint.ascent() + textPaint.descent()) / 2f;
+        canvas.drawText(label, box.centerX(), y, textPaint);
     }
 
     @Override
     public void touchEvents(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            if (isIn(event, btnEasy))
-                btnEasy.setPushed(true);
-            else if (isIn(event, btnHard))
-                btnHard.setPushed(true);
-            else if (isIn(event, btnBack))
-                btnBack.setPushed(true);
-        } else if (event.getAction() == MotionEvent.ACTION_UP) {
-            if (isIn(event, btnEasy)) {
-                if (btnEasy.isPushed()) {
-                    // Set difficulty to easy và start game
-                    game.setDifficulty(Game.Difficulty.EASY);
-                    game.getPlaying().resetGame();
-                    game.setCurrentGameState(Game.GameState.PLAYING);
-                }
-            } else if (isIn(event, btnHard)) {
-                if (btnHard.isPushed()) {
-                    // Set difficulty to hard và start game
-                    game.setDifficulty(Game.Difficulty.HARD);
-                    game.getPlaying().resetGame();
-                    game.setCurrentGameState(Game.GameState.PLAYING);
-                }
-            } else if (isIn(event, btnBack)) {
-                if (btnBack.isPushed()) {
-                    // Quay lại menu
-                    game.setCurrentGameState(Game.GameState.MENU);
-                }
-            }
-
-            btnEasy.setPushed(false);
-            btnHard.setPushed(false);
-            btnBack.setPushed(false);
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            if (isIn(event, btnEasy)) btnEasy.setPushed(true);
+            else if (isIn(event, btnHard)) btnHard.setPushed(true);
+            else if (isIn(event, btnBack)) btnBack.setPushed(true);
+            return;
         }
+        if (event.getActionMasked() != MotionEvent.ACTION_UP) return;
+
+        if (isIn(event, btnEasy) && btnEasy.isPushed()) {
+            game.setDifficulty(Game.Difficulty.EASY);
+            game.setCurrentGameState(Game.GameState.MENU);
+        } else if (isIn(event, btnHard) && btnHard.isPushed()) {
+            game.setDifficulty(Game.Difficulty.HARD);
+            game.setCurrentGameState(Game.GameState.MENU);
+        } else if (isIn(event, btnBack) && btnBack.isPushed()) {
+            game.setCurrentGameState(Game.GameState.MENU);
+        }
+
+        btnEasy.setPushed(false);
+        btnHard.setPushed(false);
+        btnBack.setPushed(false);
     }
 }

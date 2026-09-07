@@ -31,6 +31,6 @@ public abstract class Entity implements Comparable<Entity> {
 
     @Override
     public int compareTo(Entity other) {
-        return Float.compare(hitbox.top - lastCameraYValue, other.hitbox.top - other.lastCameraYValue);
+        return Float.compare(hitbox.bottom - lastCameraYValue, other.hitbox.bottom - other.lastCameraYValue);
     }
 }

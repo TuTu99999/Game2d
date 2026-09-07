@@ -24,17 +24,26 @@ public class EffectExplosion {
     private static EffectExplosionSprites sprites = new EffectExplosionSprites();
     private Random random = new Random();
     
-    public EffectExplosion(PointF startPos) {
+    public EffectExplosion(PointF startPos, PointF nearestTarget) {
         this.startPos = startPos;
         this.startTime = System.currentTimeMillis();
         this.projectiles = new ArrayList<>();
         
         // Tạo các projectile bắn random hướng
-        createRandomProjectiles();
+        createProjectiles(nearestTarget);
     }
     
-    private void createRandomProjectiles() {
+    private void createProjectiles(PointF nearestTarget) {
         for (int i = 0; i < projectileCount; i++) {
+            if (i == 0 && nearestTarget != null) {
+                projectiles.add(new ExplosionProjectile(
+                        new PointF(startPos.x, startPos.y),
+                        new PointF(nearestTarget.x, nearestTarget.y),
+                        damage,
+                        200f
+                ));
+                continue;
+            }
             // Random góc từ 0 đến 360 độ
             float angle = random.nextFloat() * 360f;
             // Random khoảng cách từ 50% đến 100% range
@@ -97,7 +106,7 @@ public class EffectExplosion {
                         }
                     }
                     projectile.explode();
-                    break;
+                    return;
                 }
             }
         }
@@ -115,9 +124,13 @@ public class EffectExplosion {
                         System.out.println("💀 Boom chết bởi EffectExplosion! Kill count tăng!");
                     }
                     projectile.explode();
-                    break;
+                    return;
                 }
             }
+        }
+
+        if (playing.damageBossIfHit(projectile.getHitbox(), damage)) {
+            projectile.explode();
         }
     }
     
@@ -224,15 +237,15 @@ public class EffectExplosion {
                 // Vẽ hiệu ứng nổ
                 android.graphics.Bitmap explosionSprite = sprites.getExplosionSprite(currentExplosionFrame);
                 canvas.drawBitmap(explosionSprite, 
-                    position.x - cameraX - 48, 
-                    position.y - cameraY - 48, 
+                    position.x + cameraX - 48,
+                    position.y + cameraY - 48,
                     null);
             } else {
                 // Vẽ projectile (có thể dùng spark_preview hoặc tạo sprite riêng)
                 // Tạm thời vẽ một hình tròn nhỏ
                 android.graphics.Paint paint = new android.graphics.Paint();
                 paint.setColor(android.graphics.Color.YELLOW);
-                canvas.drawCircle(position.x - cameraX, position.y - cameraY, 4, paint);
+                canvas.drawCircle(position.x + cameraX, position.y + cameraY, 4, paint);
             }
         }
         

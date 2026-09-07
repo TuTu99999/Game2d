@@ -1,20 +1,28 @@
 package com.tutorial.androidgametutorial.environments;
 
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.PointF;
 import android.graphics.RectF;
 
+import com.tutorial.androidgametutorial.R;
 import com.tutorial.androidgametutorial.entities.Building;
 import com.tutorial.androidgametutorial.entities.Buildings;
+import com.tutorial.androidgametutorial.entities.GameCharacters;
 import com.tutorial.androidgametutorial.entities.GameObject;
 import com.tutorial.androidgametutorial.entities.GameObjects;
 import com.tutorial.androidgametutorial.entities.enemies.Boom;
+import com.tutorial.androidgametutorial.entities.enemies.ShadowWraith;
+import com.tutorial.androidgametutorial.entities.enemies.SkeletonArcher;
 import com.tutorial.androidgametutorial.entities.enemies.Skeleton;
 import com.tutorial.androidgametutorial.entities.items.Item;
 import com.tutorial.androidgametutorial.entities.items.Items;
 import com.tutorial.androidgametutorial.gamestates.Playing;
 import com.tutorial.androidgametutorial.helpers.GameConstants;
 import com.tutorial.androidgametutorial.helpers.HelpMethods;
+import com.tutorial.androidgametutorial.helpers.BitmapCache;
+import com.tutorial.androidgametutorial.main.Game;
 import com.tutorial.androidgametutorial.main.MainActivity;
 
 import java.util.ArrayList;
@@ -24,14 +32,87 @@ public class MapManager {
     private GameMap currentMap;
     private GameMap map1; // Original outdoor map
     private GameMap map2; // Snow map
-    private GameMap map3; // Desert map (sa mạc)
+    private GameMap map3; // Desert map
+    private GameMap map4; // Hard-only Shadow Realm
     private float cameraX, cameraY;
     private Playing playing;
-    private int currentMapLevel = 1; // Track which map we're on (1, 2, or 3)
+    private int currentMapLevel = 1;
+    private volatile Bitmap shadowFloorTexture;
+    private final Paint shadowFloorPaint = new Paint();
 
     public MapManager(Playing playing) {
+        this(playing, false);
+    }
+
+    public MapManager(Playing playing, boolean tutorialMode) {
         this.playing = playing;
-        initMaps();
+        if (tutorialMode) {
+            initTutorialMap();
+        } else {
+            initMaps();
+        }
+    }
+
+    private void initTutorialMap() {
+        int rows = 14;
+        int columns = 22;
+        int[][] tutorialTiles = new int[rows][columns];
+
+        for (int row = 0; row < rows; row++) {
+            for (int column = 0; column < columns; column++) {
+                tutorialTiles[row][column] = 275;
+            }
+        }
+
+        ArrayList<Building> buildings = new ArrayList<>();
+        buildings.add(new Building(new PointF(1500, 300), Buildings.HOUSE_ONE));
+
+        ArrayList<GameObject> objects = new ArrayList<>();
+        objects.add(new GameObject(new PointF(650, 350), GameObjects.STATUE_ANGRY_YELLOW));
+        objects.add(new GameObject(new PointF(900, 900), GameObjects.BASKET_FULL_RED_FRUIT));
+        objects.add(new GameObject(new PointF(1250, 850), GameObjects.OVEN_SNOW_YELLOW));
+
+        ArrayList<Skeleton> skeletons = new ArrayList<>();
+        Skeleton tutorialEnemy = new Skeleton(new PointF(1400, 650), GameCharacters.SKELETON);
+        tutorialEnemy.applyDifficulty(Game.Difficulty.EASY);
+        skeletons.add(tutorialEnemy);
+
+        ArrayList<Boom> booms = new ArrayList<>();
+        ArrayList<Item> items = createTutorialItems();
+
+        map1 = new GameMap(
+                tutorialTiles,
+                Tiles.OUTSIDE,
+                buildings,
+                objects,
+                skeletons,
+                booms,
+                items
+        );
+        currentMap = map1;
+        currentMapLevel = 0;
+    }
+
+    public void resetTutorialMap() {
+        if (currentMapLevel != 0) return;
+
+        currentMap = map1;
+        currentMap.getSkeletonArrayList().clear();
+
+        Skeleton tutorialEnemy = new Skeleton(new PointF(1400, 650), GameCharacters.SKELETON);
+        tutorialEnemy.applyDifficulty(Game.Difficulty.EASY);
+        currentMap.getSkeletonArrayList().add(tutorialEnemy);
+
+        currentMap.getBoomArrayList().clear();
+        currentMap.getItemArrayList().clear();
+        currentMap.getItemArrayList().addAll(createTutorialItems());
+    }
+
+    private ArrayList<Item> createTutorialItems() {
+        ArrayList<Item> items = new ArrayList<>();
+        items.add(new Item(Items.MEDIPACK, new PointF(760, 650)));
+        items.add(new Item(Items.FISH, new PointF(1050, 950)));
+        return items;
     }
 
     public void setCameraValues(float cameraX, float cameraY) {
@@ -72,11 +153,39 @@ public class MapManager {
     }
 
     public void drawTiles(Canvas c) {
-        for (int j = 0; j < currentMap.getArrayHeight(); j++)
-            for (int i = 0; i < currentMap.getArrayWidth(); i++)
+        int tileSize = GameConstants.Sprite.SIZE;
+
+        if (currentMap.getFloorType() == Tiles.SHADOW) {
+            ensureShadowFloorLoaded();
+            if (shadowFloorTexture == null) return;
+            RectF mapArea = new RectF(
+                    cameraX,
+                    cameraY,
+                    cameraX + currentMap.getMapWidth(),
+                    cameraY + currentMap.getMapHeight()
+            );
+            c.drawBitmap(shadowFloorTexture, null, mapArea, shadowFloorPaint);
+            return;
+        }
+
+        // Convert the visible screen edges to tile indexes, then clamp them
+        // to the map. Tiles outside the camera are skipped completely.
+        int firstColumn = Math.max(0, (int) Math.floor(-cameraX / tileSize));
+        int lastColumn = Math.min(
+                currentMap.getArrayWidth() - 1,
+                (int) Math.floor((c.getWidth() - 1 - cameraX) / tileSize)
+        );
+        int firstRow = Math.max(0, (int) Math.floor(-cameraY / tileSize));
+        int lastRow = Math.min(
+                currentMap.getArrayHeight() - 1,
+                (int) Math.floor((c.getHeight() - 1 - cameraY) / tileSize)
+        );
+
+        for (int j = firstRow; j <= lastRow; j++)
+            for (int i = firstColumn; i <= lastColumn; i++)
                 c.drawBitmap(currentMap.getFloorType().getSprite(currentMap.getSpriteID(i, j)),
-                        i * GameConstants.Sprite.SIZE + cameraX,
-                        j * GameConstants.Sprite.SIZE + cameraY,
+                        i * tileSize + cameraX,
+                        j * tileSize + cameraY,
                         null);
     }
 
@@ -112,11 +221,48 @@ public class MapManager {
         return currentMap;
     }
 
+    /** Loads only immutable render assets; it never changes the active map. */
+    public void preloadMapResources(int mapLevel) {
+        GameMap targetMap = switch (mapLevel) {
+            case 1 -> map1;
+            case 2 -> map2;
+            case 3 -> map3;
+            case 4 -> map4;
+            default -> null;
+        };
+        if (targetMap == null) return;
+
+        if (targetMap.getFloorType() == Tiles.SHADOW) {
+            ensureShadowFloorLoaded();
+        } else {
+            targetMap.getFloorType().preload();
+        }
+
+        if (targetMap.getBuildingArrayList() != null) {
+            for (Building building : targetMap.getBuildingArrayList()) {
+                building.getBuildingType().getHouseImg();
+            }
+        }
+        if (targetMap.getGameObjectArrayList() != null) {
+            for (GameObject object : targetMap.getGameObjectArrayList()) {
+                object.getObjectType().getObjectImg();
+            }
+        }
+        // Item icons are tiny shared assets and are already resolved when an
+        // Item creates its hitbox. Avoid iterating this mutable gameplay list
+        // from the preload thread while a run may be reset.
+    }
+
     public int getCurrentMapLevel() {
         return currentMapLevel;
     }
 
     public void progressToNextMap() {
+        if (currentMapLevel >= 1 && currentMapLevel <= 3) {
+            // Không mang đạn/skill còn tồn tại của map cũ sang map mới.
+            playing.clearTemporaryAttacks();
+        }
+
         if (currentMapLevel == 1) {
             // Move to snow map (map 2)
             currentMapLevel = 2;
@@ -129,7 +275,6 @@ public class MapManager {
             playing.setCameraValues(new PointF(cX, cY));
             cameraX = cX;
             cameraY = cY;
-            playing.spawnBoss();
         } else if (currentMapLevel == 2) {
             // Move to desert map (map 3)
             currentMapLevel = 3;
@@ -143,7 +288,16 @@ public class MapManager {
             cameraX = cX;
             cameraY = cY;
             playing.spawnBoss();
+        } else if (currentMapLevel == 3) {
+            currentMapLevel = 4;
+            currentMap = map4;
 
+            float cX = MainActivity.GAME_WIDTH / 2f - (currentMap.getMapWidth() / 2f);
+            float cY = MainActivity.GAME_HEIGHT / 2f - (currentMap.getMapHeight() / 2f);
+            playing.setCameraValues(new PointF(cX, cY));
+            cameraX = cX;
+            cameraY = cY;
+            playing.spawnFinalBoss();
         }
     }
 
@@ -152,6 +306,114 @@ public class MapManager {
         currentMapLevel = 1;
         currentMap = map1;
         System.out.println("🗺️ Reset về Map 1");
+    }
+
+    public void resetAllMaps() {
+        resetMap(map1, 5, 3, createMap1Items());
+        resetMap(map2, 8, 5, createMap2Items());
+        resetMap(map3, 12, 8, createMap3Items());
+        resetMap4();
+    }
+
+    private void resetMap4() {
+        if (map4 == null) return;
+
+        map4.getSkeletonArrayList().clear();
+        map4.getSkeletonArrayList().addAll(createMap4Enemies());
+        map4.getBoomArrayList().clear();
+        map4.getItemArrayList().clear();
+        map4.getItemArrayList().addAll(createMap4Items());
+        map4.moveEnemiesOutOfBlockedAreas();
+    }
+
+    private void resetMap(GameMap map, int skeletonCount, int boomCount, ArrayList<Item> items) {
+        if (map.getSkeletonArrayList() != null) {
+            map.getSkeletonArrayList().clear();
+            map.getSkeletonArrayList().addAll(
+                    HelpMethods.GetSkeletonsRandomized(skeletonCount, map.getSpriteIds())
+            );
+        }
+
+        if (map.getBoomArrayList() != null) {
+            map.getBoomArrayList().clear();
+            map.getBoomArrayList().addAll(
+                    HelpMethods.GetBoomsRandomized(boomCount, map.getSpriteIds())
+            );
+        }
+
+        if (map.getItemArrayList() != null) {
+            map.getItemArrayList().clear();
+            map.getItemArrayList().addAll(items);
+        }
+
+        applyDifficultyToEnemies(map.getSkeletonArrayList(), map.getBoomArrayList());
+        map.moveEnemiesOutOfBlockedAreas();
+    }
+
+    private void applyDifficultyToEnemies(ArrayList<Skeleton> skeletons, ArrayList<Boom> booms) {
+        Game.Difficulty difficulty = playing.getCurrentDifficulty();
+
+        if (skeletons != null) {
+            for (Skeleton skeleton : skeletons) {
+                skeleton.applyDifficulty(difficulty);
+            }
+        }
+
+        if (booms != null) {
+            for (Boom boom : booms) {
+                boom.applyDifficulty(difficulty);
+                boom.setPlaying(playing);
+            }
+        }
+    }
+
+    private ArrayList<Item> createMap1Items() {
+        ArrayList<Item> items = new ArrayList<>();
+        items.add(new Item(Items.FISH, new PointF(560, 560)));
+        items.add(new Item(Items.MEDIPACK, new PointF(200, 700)));
+        items.add(new Item(Items.EMPTY_POT, new PointF(300, 150)));
+        return items;
+    }
+
+    private ArrayList<Item> createMap2Items() {
+        ArrayList<Item> items = new ArrayList<>();
+        items.add(new Item(Items.MEDIPACK, new PointF(400, 400)));
+        items.add(new Item(Items.FISH, new PointF(800, 600)));
+        items.add(new Item(Items.EMPTY_POT, new PointF(600, 200)));
+        items.add(new Item(Items.MEDIPACK, new PointF(1000, 700)));
+        return items;
+    }
+
+    private ArrayList<Item> createMap3Items() {
+        ArrayList<Item> items = new ArrayList<>();
+        items.add(new Item(Items.MEDIPACK, new PointF(350, 300)));
+        items.add(new Item(Items.FISH, new PointF(600, 500)));
+        items.add(new Item(Items.EMPTY_POT, new PointF(900, 200)));
+        items.add(new Item(Items.MEDIPACK, new PointF(1100, 800)));
+        items.add(new Item(Items.FISH, new PointF(200, 900)));
+        return items;
+    }
+
+    private ArrayList<Item> createMap4Items() {
+        ArrayList<Item> items = new ArrayList<>();
+        items.add(new Item(Items.MEDIPACK, new PointF(500, 730)));
+        items.add(new Item(Items.FISH, new PointF(1680, 760)));
+        items.add(new Item(Items.MEDIPACK, new PointF(1080, 1220)));
+        return items;
+    }
+
+    private ArrayList<Skeleton> createMap4Enemies() {
+        ArrayList<Skeleton> enemies = new ArrayList<>();
+        enemies.add(new ShadowWraith(new PointF(330, 410)));
+        enemies.add(new ShadowWraith(new PointF(1780, 430)));
+        enemies.add(new ShadowWraith(new PointF(360, 1040)));
+        enemies.add(new ShadowWraith(new PointF(1770, 1050)));
+        enemies.add(new ShadowWraith(new PointF(700, 520)));
+        enemies.add(new ShadowWraith(new PointF(1440, 1060)));
+        enemies.add(new SkeletonArcher(new PointF(430, 740)));
+        enemies.add(new SkeletonArcher(new PointF(1740, 740)));
+        enemies.add(new SkeletonArcher(new PointF(1050, 1240)));
+        return enemies;
     }
 
     public void resetMapToInitialState() {
@@ -195,6 +457,8 @@ public class MapManager {
         if (currentMap.getItemArrayList() != null) {
             currentMap.getItemArrayList().addAll(initialItems);
         }
+
+        currentMap.moveEnemiesOutOfBlockedAreas();
 
         System.out.println("🔄 Map đã được reset về trạng thái ban đầu:");
         System.out.println("👹 5 Skeletons được tạo lại");
@@ -362,6 +626,8 @@ public class MapManager {
     }
 
     private void initMaps() {
+        shadowFloorPaint.setFilterBitmap(false);
+
         // Map 1 - Original outdoor map
         int[][] outsideArray = {
                 {188, 189, 279, 275, 187, 189, 279, 275, 279, 276, 275, 279, 275, 275, 279, 275, 278, 276, 275, 278, 275, 279, 275},
@@ -425,6 +691,9 @@ public class MapManager {
                 {114, 110, 111, 114, 110, 112, 114, 110, 113, 110, 114, 111, 110, 114, 112, 110, 113, 114, 110, 111, 114, 110, 112}
         };
 
+        // Map 4 uses one large seamless Shadow Realm floor texture.
+        int[][] shadowArray = new int[16][23];
+
         // Buildings for Map 1
         ArrayList<Building> buildingArrayList1 = new ArrayList<>();
         buildingArrayList1.add(new Building(new PointF(1440, 160), Buildings.HOUSE_ONE));
@@ -442,6 +711,9 @@ public class MapManager {
         buildingArrayList3.add(new Building(new PointF(1440, 160), Buildings.HOUSE_ONE));
         buildingArrayList3.add(new Building(new PointF(1540, 880), Buildings.HOUSE_TWO));
         buildingArrayList3.add(new Building(new PointF(575, 1000), Buildings.HOUSE_SIX));
+
+        ArrayList<Building> buildingArrayList4 = new ArrayList<>();
+        buildingArrayList4.add(new Building(new PointF(919, 70), Buildings.SHADOW_SHRINE));
 
         // Game objects for Map 1
         ArrayList<GameObject> gameObjectArrayList1 = new ArrayList<>();
@@ -464,26 +736,25 @@ public class MapManager {
         gameObjectArrayList3.add(new GameObject(new PointF(1000, 350), GameObjects.BASKET_FULL_RED_FRUIT));
         gameObjectArrayList3.add(new GameObject(new PointF(620, 520), GameObjects.STATUE_ANGRY_YELLOW));
 
+        ArrayList<GameObject> gameObjectArrayList4 = new ArrayList<>();
+        gameObjectArrayList4.add(new GameObject(new PointF(120, 170), GameObjects.BROKEN_SHADOW_PILLAR));
+        gameObjectArrayList4.add(new GameObject(new PointF(1950, 180), GameObjects.BROKEN_SHADOW_PILLAR));
+        gameObjectArrayList4.add(new GameObject(new PointF(140, 1160), GameObjects.BROKEN_SHADOW_PILLAR));
+        gameObjectArrayList4.add(new GameObject(new PointF(1940, 1140), GameObjects.BROKEN_SHADOW_PILLAR));
+        gameObjectArrayList4.add(new GameObject(new PointF(500, 250), GameObjects.SHADOW_ROCK));
+        gameObjectArrayList4.add(new GameObject(new PointF(1570, 270), GameObjects.SHADOW_ROCK));
+        gameObjectArrayList4.add(new GameObject(new PointF(520, 1180), GameObjects.SHADOW_ROCK));
+        gameObjectArrayList4.add(new GameObject(new PointF(1590, 1170), GameObjects.SHADOW_ROCK));
+
         // Items for Map 1
-        ArrayList<Item> outsideItemArrayList1 = new ArrayList<>();
-        outsideItemArrayList1.add(new Item(Items.FISH, new PointF(560, 560)));
-        outsideItemArrayList1.add(new Item(Items.MEDIPACK, new PointF(200, 700)));
-        outsideItemArrayList1.add(new Item(Items.EMPTY_POT, new PointF(300, 150)));
+        ArrayList<Item> outsideItemArrayList1 = createMap1Items();
 
         // Items for Map 2 (Snow map) - different positions
-        ArrayList<Item> outsideItemArrayList2 = new ArrayList<>();
-        outsideItemArrayList2.add(new Item(Items.MEDIPACK, new PointF(400, 400)));
-        outsideItemArrayList2.add(new Item(Items.FISH, new PointF(800, 600)));
-        outsideItemArrayList2.add(new Item(Items.EMPTY_POT, new PointF(600, 200)));
-        outsideItemArrayList2.add(new Item(Items.MEDIPACK, new PointF(1000, 700))); // Extra medipack for harder map
+        ArrayList<Item> outsideItemArrayList2 = createMap2Items();
 
         // Items for Map 3 (Desert map) - more items for hardest map
-        ArrayList<Item> outsideItemArrayList3 = new ArrayList<>();
-        outsideItemArrayList3.add(new Item(Items.MEDIPACK, new PointF(350, 300)));
-        outsideItemArrayList3.add(new Item(Items.FISH, new PointF(600, 500)));
-        outsideItemArrayList3.add(new Item(Items.EMPTY_POT, new PointF(900, 200)));
-        outsideItemArrayList3.add(new Item(Items.MEDIPACK, new PointF(1100, 800)));
-        outsideItemArrayList3.add(new Item(Items.FISH, new PointF(200, 900))); // Extra items for hardest map
+        ArrayList<Item> outsideItemArrayList3 = createMap3Items();
+        ArrayList<Item> outsideItemArrayList4 = createMap4Items();
 
         // Enemies for Map 1 (easier)
         ArrayList<Skeleton> skeletonsOutside1 = HelpMethods.GetSkeletonsRandomized(5, outsideArray);
@@ -496,17 +767,12 @@ public class MapManager {
         // Enemies for Map 3 (hardest - most enemies)
         ArrayList<Skeleton> skeletonsOutside3 = HelpMethods.GetSkeletonsRandomized(12, desertArray); // Most skeletons
         ArrayList<Boom> boomsOutside3 = HelpMethods.GetBoomsRandomized(8, desertArray); // Most booms
+        ArrayList<Skeleton> shadowEnemies = createMap4Enemies();
+        ArrayList<Boom> shadowBooms = new ArrayList<>();
 
-        // Set playing reference for booms in all maps
-        for (Boom boom : boomsOutside1) {
-            boom.setPlaying(playing);
-        }
-        for (Boom boom : boomsOutside2) {
-            boom.setPlaying(playing);
-        }
-        for (Boom boom : boomsOutside3) {
-            boom.setPlaying(playing);
-        }
+        applyDifficultyToEnemies(skeletonsOutside1, boomsOutside1);
+        applyDifficultyToEnemies(skeletonsOutside2, boomsOutside2);
+        applyDifficultyToEnemies(skeletonsOutside3, boomsOutside3);
 
         // Create Map 1 (Original outdoor map)
         map1 = new GameMap(
@@ -539,6 +805,16 @@ public class MapManager {
                 skeletonsOutside3,
                 boomsOutside3,
                 outsideItemArrayList3
+        );
+
+        map4 = new GameMap(
+                shadowArray,
+                Tiles.SHADOW,
+                buildingArrayList4,
+                gameObjectArrayList4,
+                shadowEnemies,
+                shadowBooms,
+                outsideItemArrayList4
         );
 
         // Start with Map 1
@@ -621,5 +897,14 @@ public class MapManager {
                 HelpMethods.CreatePointForDoorway(map1, 2),
                 insideGreenRoofHouseMap,
                 HelpMethods.CreatePointForDoorway(3, 6));
+    }
+
+    private synchronized void ensureShadowFloorLoaded() {
+        if (shadowFloorTexture != null && !shadowFloorTexture.isRecycled()) return;
+        shadowFloorTexture = BitmapCache.get(
+                MainActivity.getGameContext(),
+                R.drawable.shadow_floor,
+                Bitmap.Config.RGB_565
+        );
     }
 }

@@ -12,6 +12,7 @@ import com.tutorial.androidgametutorial.entities.BoomSprites;
 import com.tutorial.androidgametutorial.environments.GameMap;
 import com.tutorial.androidgametutorial.helpers.GameConstants;
 import com.tutorial.androidgametutorial.helpers.HelpMethods;
+import com.tutorial.androidgametutorial.main.Game;
 
 import java.util.Random;
 
@@ -26,6 +27,7 @@ public class Boom extends Character {
     private float chaseSpeed = 700f;        // Tăng tốc độ khi đuổi người chơi (cao nhất trong 3 loại)
     private float chaseRange = 1000f;       // Tăng phạm vi phát hiện
     private float aggressiveChaseRange = 1500f; // Phạm vi đuổi rất tích cực (cao nhất)
+    private int obstacleDirection = rand.nextBoolean() ? 1 : -1;
 
     // Boom attack system
     private boolean isExploding = false;
@@ -39,7 +41,12 @@ public class Boom extends Character {
 
     public Boom(PointF pos) {
         super(pos, GameCharacters.BOOM);
-        setStartHealth(80); // Ít máu hơn Skeleton nhưng nguy hiểm hơn
+        applyDifficulty(Game.Difficulty.EASY);
+    }
+
+    public void applyDifficulty(Game.Difficulty difficulty) {
+        setStartHealth(80);
+        setDamage(25);
     }
 
     public void update(double delta, GameMap gameMap) {
@@ -93,7 +100,7 @@ public class Boom extends Character {
         this.playing = playing;
 
         // Điều chỉnh behavior theo độ khó - CHỈ SET STATS MỘT LẦN KHI TẠO
-        boolean shouldChase = (playing.getCurrentDifficulty() == com.tutorial.androidgametutorial.main.Game.Difficulty.HARD);
+        boolean shouldChase = false;
 
         if (shouldChase) {
             // Chế độ khó: có chase, stats cao hơn
@@ -201,13 +208,18 @@ public class Boom extends Character {
 
     private void dealExplosionDamage() {
         if (targetPlayer != null) {
-            // Trừ 2 cục máu (200 damage)
-            targetPlayer.damageCharacter(200);
+            // Damage depends on the selected difficulty.
+            targetPlayer.damageCharacter(getDamage());
         }
         
         // Thêm ExplosionEffect khi Boom nổ
         if (playing != null) {
-            playing.addExplosionEffect(new com.tutorial.androidgametutorial.effects.ExplosionEffect(new PointF(hitbox.centerX(), hitbox.centerY())));
+            playing.addExplosionEffect(
+                    new com.tutorial.androidgametutorial.effects.ExplosionEffect(
+                            new PointF(hitbox.centerX(), hitbox.centerY()),
+                            GameConstants.Sprite.SIZE * 1.2f
+                    )
+            );
             playing.playBoomExplosionSound(); // Phát âm thanh nổ
         }
     }
@@ -265,31 +277,53 @@ public class Boom extends Character {
         }
 
         if (Math.abs(deltaX) > Math.abs(deltaY)) {
-            if (canWalkHere(hitbox, deltaX, 0, gameMap)) {
-                hitbox.left += deltaX;
-                hitbox.right += deltaX;
-                faceDir = deltaX > 0 ? GameConstants.Face_Dir.RIGHT : GameConstants.Face_Dir.LEFT;
-            } else if (canWalkHere(hitbox, 0, deltaY, gameMap)) {
-                hitbox.top += deltaY;
-                hitbox.bottom += deltaY;
-                faceDir = deltaY > 0 ? GameConstants.Face_Dir.DOWN : GameConstants.Face_Dir.UP;
+            if (!moveHorizontal(deltaX, gameMap)) {
+                moveAroundHorizontalObstacle(deltaChange, gameMap);
             }
-        } else {
-            if (canWalkHere(hitbox, 0, deltaY, gameMap)) {
-                hitbox.top += deltaY;
-                hitbox.bottom += deltaY;
-                faceDir = deltaY > 0 ? GameConstants.Face_Dir.DOWN : GameConstants.Face_Dir.UP;
-            } else if (canWalkHere(hitbox, deltaX, 0, gameMap)) {
-                hitbox.left += deltaX;
-                hitbox.right += deltaX;
-                faceDir = deltaX > 0 ? GameConstants.Face_Dir.RIGHT : GameConstants.Face_Dir.LEFT;
-            }
+        } else if (!moveVertical(deltaY, gameMap)) {
+            moveAroundVerticalObstacle(deltaChange, gameMap);
+        }
+    }
+
+    private boolean moveHorizontal(float amount, GameMap gameMap) {
+        if (Math.abs(amount) < 0.01f || !canWalkHere(hitbox, amount, 0, gameMap)) {
+            return false;
+        }
+
+        hitbox.offset(amount, 0);
+        faceDir = amount > 0 ? GameConstants.Face_Dir.RIGHT : GameConstants.Face_Dir.LEFT;
+        return true;
+    }
+
+    private boolean moveVertical(float amount, GameMap gameMap) {
+        if (Math.abs(amount) < 0.01f || !canWalkHere(hitbox, 0, amount, gameMap)) {
+            return false;
+        }
+
+        hitbox.offset(0, amount);
+        faceDir = amount > 0 ? GameConstants.Face_Dir.DOWN : GameConstants.Face_Dir.UP;
+        return true;
+    }
+
+    private void moveAroundHorizontalObstacle(float step, GameMap gameMap) {
+        float verticalStep = obstacleDirection * step;
+        if (!moveVertical(verticalStep, gameMap)) {
+            obstacleDirection *= -1;
+            moveVertical(-verticalStep, gameMap);
+        }
+    }
+
+    private void moveAroundVerticalObstacle(float step, GameMap gameMap) {
+        float horizontalStep = obstacleDirection * step;
+        if (!moveHorizontal(horizontalStep, gameMap)) {
+            obstacleDirection *= -1;
+            moveHorizontal(-horizontalStep, gameMap);
         }
     }
 
     private void moveRandomly(double delta, GameMap gameMap, float deltaChange) {
         if (System.currentTimeMillis() - lastDirChange >= 3000) {
-            faceDir = new Random().nextInt(4);
+            faceDir = rand.nextInt(4);
             lastDirChange = System.currentTimeMillis();
         }
 
@@ -329,9 +363,7 @@ public class Boom extends Character {
     }
 
     private boolean canWalkHere(android.graphics.RectF hitbox, float deltaX, float deltaY, GameMap gameMap) {
-        // Logic collision detection đơn giản - luôn cho phép di chuyển
-        // Boom có thể đi qua tường để đuổi theo player
-        return true;
+        return HelpMethods.CanWalkHere(hitbox, deltaX, deltaY, gameMap);
     }
 
     private void checkTimeToAttackTimer() {
@@ -382,6 +414,11 @@ public class Boom extends Character {
         } else {
             return boomSprites.getMoveSprite(faceDir);
         }
+    }
+
+    public float getMovementBobOffset() {
+        if (!moving || isExploding) return 0f;
+        return (aniIndex == 1 || aniIndex == 3) ? -5f : 0f;
     }
 
     public void setPlaying(com.tutorial.androidgametutorial.gamestates.Playing playing) {

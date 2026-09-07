@@ -4,70 +4,58 @@ import static com.tutorial.androidgametutorial.main.MainActivity.GAME_HEIGHT;
 import static com.tutorial.androidgametutorial.main.MainActivity.GAME_WIDTH;
 
 import android.graphics.PointF;
-import android.media.AudioAttributes;
-import android.media.SoundPool;
 
-import com.tutorial.androidgametutorial.R;
-import com.tutorial.androidgametutorial.entities.enemies.Skeleton;
+import com.tutorial.androidgametutorial.effects.ExplosionEffect;
 import com.tutorial.androidgametutorial.gamestates.Playing;
-import com.tutorial.androidgametutorial.main.MainActivity;
+import com.tutorial.androidgametutorial.main.LoadoutManager;
 
 public class Player extends Character {
 
-    private long lastAttackTime = 0;
-    private long attackCooldown = 500; // milliseconds
+    private long lastAttackTime;
+    private long attackCooldown = 450L;
+    private final long[] lastSkillTimes = new long[3];
+    private LoadoutManager loadoutManager;
+    private float characterSpeedMultiplier = 1.0f;
+    private GameCharacters displayCharacter = GameCharacters.PLAYER;
 
-    private long lastSkillTime = 0;
-    private final long skillCooldown = 1000; // 1 giây hồi chiêu
-    private int skillRange = 500;
-    private int skillDamage = 100;
+    private int shieldHits;
+    private long shieldStartTime;
+    private static final long SHIELD_DURATION = 30000L;
 
-    // EffectExplosion skill
-    private long lastExplosionSkillTime = 0;
-    private final long explosionSkillCooldown = 10000; // 10 giây hồi chiêu
-
-    // Spark skill
-    private long lastSparkSkillTime = 0;
-    private final long sparkSkillCooldown = 1000; // 1 giây hồi chiêu
-
-    // Shield system (từ MEDIPACK)
-    private int shieldHits = 0; // Số đòn còn lại có thể đỡ
-    private long shieldStartTime = 0;
-    private final long shieldDuration = 30000; // 30 giây tồn tại
-    
-    // Speed boost system (từ FISH)
-    private float speedMultiplier = 1.0f; // Hệ số tốc độ
-    private long speedBoostStartTime = 0;
-    private final long speedBoostDuration = 5000; // 5 giây tăng tốc
-
-    private static SoundPool soundPool;
-    private static int skillSoundId;
-    private static int sparkSkillSoundId;
-
-    static {
-        AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_GAME)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build();
-
-        soundPool = new SoundPool.Builder()
-                .setMaxStreams(5)
-                .setAudioAttributes(audioAttributes)
-                .build();
-
-        skillSoundId = soundPool.load(MainActivity.getGameContext(), R.raw.fast_whoosh, 1);
-        sparkSkillSoundId = soundPool.load(MainActivity.getGameContext(), R.raw.spark_voice, 1);
-    }
+    private float itemSpeedMultiplier = 1.0f;
+    private long speedBoostStartTime;
+    private static final float SPEED_BOOST_MULTIPLIER = 1.2f;
+    private static final long SPEED_BOOST_DURATION = 5000L;
 
     public Player() {
-        super(new PointF(GAME_WIDTH / 2, GAME_HEIGHT / 2), GameCharacters.PLAYER);
+        super(new PointF(GAME_WIDTH / 2f, GAME_HEIGHT / 2f), GameCharacters.PLAYER);
         setStartHealth(600);
     }
 
     public void update(double delta, boolean movePlayer) {
-        if (movePlayer)
-            updateAnimation();
+        if (movePlayer) {
+            updateAnimation(5);
+        }
+        updateAttackState();
         updateWepHitbox();
+    }
+
+    public void applyLoadout(LoadoutManager manager) {
+        loadoutManager = manager;
+        LoadoutManager.CharacterType character = manager.getCharacter();
+        LoadoutManager.WeaponType weapon = manager.getWeapon();
+        displayCharacter = switch (character) {
+            case WARRIOR -> GameCharacters.WARRIOR;
+            case ROGUE -> GameCharacters.ROGUE;
+            case GUARDIAN -> GameCharacters.GUARDIAN;
+            case ADVENTURER -> GameCharacters.ADVENTURER;
+        };
+        characterSpeedMultiplier = character.getSpeedMultiplier();
+        setStartHealth(character.getMaxHealth());
+        setDamage(Math.max(1, Math.round(
+                weapon.getDamage() * character.getDamageMultiplier()
+        )));
+        attackCooldown = weapon.getCooldownMs();
     }
 
     public boolean canAttack() {
@@ -82,147 +70,200 @@ public class Player extends Character {
         attackCooldown = cooldown;
     }
 
-
-    public boolean canCastThrow() {
-        return System.currentTimeMillis() - lastSkillTime >= skillCooldown;
+    public float getAttackCooldownRemaining() {
+        return getCooldownRemaining(lastAttackTime, attackCooldown);
     }
 
-    public void setLastSkillTime() {
-        lastSkillTime = System.currentTimeMillis();
+    public float getSkillCooldownRemaining(int slot) {
+        if (loadoutManager == null || slot < 0 || slot >= lastSkillTimes.length) return 0f;
+        return getCooldownRemaining(lastSkillTimes[slot],
+                loadoutManager.getSkill(slot).getCooldownMs());
     }
 
-    public void castThrowSword(Playing playing) {
-        if (!canCastThrow()) return;
-        setLastSkillTime();
-
-        soundPool.play(skillSoundId, 1, 1, 1, 0, 1f);
-
-        // chuyển từ screen coords -> world coords (player hitbox hiện là screen coords)
-        float worldPx = getHitbox().centerX() - playing.getCameraX();
-        float worldPy = getHitbox().centerY() - playing.getCameraY();
-
-        Skeleton nearest = playing.findNearestSkeleton(
-                worldPx,
-                worldPy,
-                skillRange
-        );
-
-        if (nearest == null) return;
-
-        // target của skeleton đã ở world coords
-        Projectile sword = new Projectile(
-                new PointF(worldPx, worldPy),
-                new PointF(nearest.getHitbox().centerX(), nearest.getHitbox().centerY()),
-                skillDamage,
-                300f // tốc độ bay (px / s nếu delta tính theo giây)
-        );
-
-        playing.addProjectile(sword);
-
+    private float getCooldownRemaining(long lastUseTime, long cooldown) {
+        long elapsed = System.currentTimeMillis() - lastUseTime;
+        if (elapsed >= cooldown) return 0f;
+        return 1f - (float) elapsed / cooldown;
     }
 
-    // EffectExplosion skill methods
-    public boolean canCastExplosion() {
-        return System.currentTimeMillis() - lastExplosionSkillTime >= explosionSkillCooldown;
+    public boolean castSkill(int slot, Playing playing) {
+        if (loadoutManager == null || slot < 0 || slot >= lastSkillTimes.length) return false;
+
+        LoadoutManager.SkillType skill = loadoutManager.getSkill(slot);
+        long now = System.currentTimeMillis();
+        if (now - lastSkillTimes[slot] < skill.getCooldownMs()) return false;
+        if (!canSpendHealth(skill.getHealthCost())) return false;
+
+        float worldX = getHitbox().centerX() - playing.getCameraX();
+        float worldY = getHitbox().centerY() - playing.getCameraY();
+        PointF playerWorldPosition = new PointF(worldX, worldY);
+
+        switch (skill) {
+            case CHARGED_BLAST -> {
+                PointF target = playing.findNearestEnemyPosition(worldX, worldY, 650f);
+                if (target == null) return false;
+                playing.addProjectile(new Projectile(
+                        playerWorldPosition, target, skill.getDamage(), 520f,
+                        Projectile.VisualType.CHARGED, false
+                ));
+            }
+            case SPARK_STORM ->
+                    playing.addSparkSkill(new SparkSkill(playerWorldPosition, playing));
+            case ARCANE_BURST -> {
+                playing.damageEnemiesInRadius(
+                        worldX, worldY, 310f, skill.getDamage(), false
+                );
+                playing.showAreaSkillEffect(worldX, worldY, 310f, skill);
+            }
+            case FROST_PULSE -> {
+                PointF target = playing.findNearestEnemyPosition(worldX, worldY, 700f);
+                if (target == null) return false;
+                fireFan(playing, playerWorldPosition, target, 3, 18f,
+                        skill.getDamage(), 430f, Projectile.VisualType.PULSE, true);
+            }
+            case SACRIFICE_NOVA -> {
+                spendHealth(skill.getHealthCost());
+                playing.damageEnemiesInRadius(
+                        worldX, worldY, 450f, skill.getDamage(), false
+                );
+                playing.showAreaSkillEffect(worldX, worldY, 450f, skill);
+                playing.addExplosionEffect(new ExplosionEffect(playerWorldPosition, 300f));
+            }
+            case FLAME_RIFT -> {
+                playing.damageEnemiesInRadius(
+                        worldX, worldY, 350f, skill.getDamage(), false
+                );
+                playing.showAreaSkillEffect(worldX, worldY, 350f, skill);
+                playing.addExplosionEffect(new ExplosionEffect(playerWorldPosition, 260f));
+            }
+            case VOID_DRAIN -> {
+                playing.damageEnemiesInRadius(
+                        worldX, worldY, 300f, skill.getDamage(), false
+                );
+                playing.showAreaSkillEffect(worldX, worldY, 300f, skill);
+                healCharacter(60);
+            }
+            case GLACIAL_RING -> {
+                fireRadial(playing, playerWorldPosition, 8, skill.getDamage(),
+                        460f, Projectile.VisualType.PULSE, true);
+            }
+            case COMET_SHOT -> {
+                PointF target = playing.findNearestEnemyPosition(worldX, worldY, 800f);
+                if (target == null) return false;
+                fireFan(playing, playerWorldPosition, target, 4, 8f,
+                        skill.getDamage(), 620f, Projectile.VisualType.COMET, false);
+            }
+            case OVERLOAD -> {
+                PointF target = playing.findNearestEnemyPosition(worldX, worldY, 850f);
+                if (target == null) return false;
+                spendHealth(skill.getHealthCost());
+                fireBurst(playing, playerWorldPosition, target, 6,
+                        skill.getDamage(), 760f, 90L);
+            }
+        }
+
+        lastSkillTimes[slot] = now;
+        playing.playSkillSound(skill);
+        return true;
     }
 
-    public void setLastExplosionSkillTime() {
-        lastExplosionSkillTime = System.currentTimeMillis();
+    private void fireFan(Playing playing, PointF start, PointF target,
+                         int count, float angleStep, int damage, float speed,
+                         Projectile.VisualType visualType, boolean slow) {
+        float baseAngle = (float) Math.atan2(target.y - start.y, target.x - start.x);
+        float firstOffset = -angleStep * (count - 1) / 2f;
+
+        for (int i = 0; i < count; i++) {
+            float angle = baseAngle + (float) Math.toRadians(firstOffset + i * angleStep);
+            PointF projectileTarget = new PointF(
+                    start.x + (float) Math.cos(angle) * 900f,
+                    start.y + (float) Math.sin(angle) * 900f
+            );
+            playing.addProjectile(new Projectile(
+                    start, projectileTarget, damage, speed, visualType, slow
+            ));
+        }
     }
 
-    public void castEffectExplosion(Playing playing) {
-        if (!canCastExplosion()) return;
-        setLastExplosionSkillTime();
-
-        soundPool.play(skillSoundId, 1, 1, 1, 0, 1f);
-
-        // chuyển từ screen coords -> world coords
-        float worldPx = getHitbox().centerX() - playing.getCameraX();
-        float worldPy = getHitbox().centerY() - playing.getCameraY();
-
-        EffectExplosion explosion = new EffectExplosion(new PointF(worldPx, worldPy));
-        playing.addEffectExplosion(explosion);
+    private void fireRadial(Playing playing, PointF start, int count,
+                            int damage, float speed, Projectile.VisualType visualType,
+                            boolean slow) {
+        for (int i = 0; i < count; i++) {
+            float angle = (float) (Math.PI * 2 * i / count);
+            PointF projectileTarget = new PointF(
+                    start.x + (float) Math.cos(angle) * 850f,
+                    start.y + (float) Math.sin(angle) * 850f
+            );
+            playing.addProjectile(new Projectile(
+                    start, projectileTarget, damage, speed, visualType, slow
+            ));
+        }
     }
 
-    // Spark skill methods
-    public boolean canCastSpark() {
-        return System.currentTimeMillis() - lastSparkSkillTime >= sparkSkillCooldown;
+    private void fireBurst(Playing playing, PointF start, PointF target,
+                           int count, int totalDamage, float speed, long shotDelayMs) {
+        int damagePerShot = Math.max(1, Math.round((float) totalDamage / count));
+        for (int i = 0; i < count; i++) {
+            playing.addProjectile(new Projectile(
+                    start, target, damagePerShot, speed,
+                    Projectile.VisualType.OVERLOAD, false, i * shotDelayMs
+            ));
+        }
     }
 
-    public void setLastSparkSkillTime() {
-        lastSparkSkillTime = System.currentTimeMillis();
+    public void resetCooldowns() {
+        lastAttackTime = 0L;
+        for (int i = 0; i < lastSkillTimes.length; i++) {
+            lastSkillTimes[i] = 0L;
+        }
     }
 
-    public void castSparkSkill(Playing playing) {
-        if (!canCastSpark()) return;
-        setLastSparkSkillTime();
-
-        soundPool.play(sparkSkillSoundId, 1, 1, 1, 0, 1f);
-
-        // Player hitbox đang ở screen coordinates, cần chuyển sang world coordinates
-        float worldPx = getHitbox().centerX() - playing.getCameraX();
-        float worldPy = getHitbox().centerY() - playing.getCameraY();
-
-        SparkSkill sparkSkill = new SparkSkill(new PointF(worldPx, worldPy), playing);
-        playing.addSparkSkill(sparkSkill);
+    public void shiftTimers(long pausedDuration) {
+        if (pausedDuration <= 0L) return;
+        if (lastAttackTime > 0L) lastAttackTime += pausedDuration;
+        for (int i = 0; i < lastSkillTimes.length; i++) {
+            if (lastSkillTimes[i] > 0L) lastSkillTimes[i] += pausedDuration;
+        }
+        if (shieldHits > 0) shieldStartTime += pausedDuration;
+        if (itemSpeedMultiplier > 1.0f) speedBoostStartTime += pausedDuration;
     }
-    
-    // Item effects
+
     public void useMedipack() {
-        // Hồi 3/10 máu (30% máu)
-        int healAmount = (int) (getMaxHealth() * 0.3f);
-        healCharacter(healAmount);
-        System.out.println("❤️ MEDIPACK! Hồi máu +" + healAmount + " HP. Hiện tại: " + getCurrentHealth() + "/" + getMaxHealth());
+        healCharacter((int) (getMaxHealth() * 0.3f));
     }
-    
+
     public void useFish() {
-        // Tăng tốc độ di chuyển
-        speedMultiplier = 2.0f; // Tăng 100% tốc độ (gấp đôi)
+        itemSpeedMultiplier = SPEED_BOOST_MULTIPLIER;
         speedBoostStartTime = System.currentTimeMillis();
-        System.out.println("🐟 FISH! Tăng tốc được kích hoạt! Tốc độ tăng 100% trong 5 giây.");
     }
-    
+
     public void useEmptyPot() {
-        // Tạo khiên bảo vệ 3 đòn
         shieldHits = 3;
         shieldStartTime = System.currentTimeMillis();
-        System.out.println("🛡️ EMPTY_POT! Khiên bảo vệ được kích hoạt! Có thể đỡ 3 đòn.");
     }
-    
-    // Kiểm tra và cập nhật hiệu ứng
+
     public void updateEffects() {
-        long currentTime = System.currentTimeMillis();
-        
-        // Kiểm tra shield hết hạn
-        if (shieldHits > 0 && currentTime - shieldStartTime >= shieldDuration) {
+        long now = System.currentTimeMillis();
+        if (shieldHits > 0 && now - shieldStartTime >= SHIELD_DURATION) {
             shieldHits = 0;
-            System.out.println("Khiên bảo vệ đã hết hạn!");
         }
-        
-        // Kiểm tra speed boost hết hạn
-        if (speedMultiplier > 1.0f && currentTime - speedBoostStartTime >= speedBoostDuration) {
-            speedMultiplier = 1.0f;
-            System.out.println("Tăng tốc đã hết hạn!");
+        if (itemSpeedMultiplier > 1.0f
+                && now - speedBoostStartTime >= SPEED_BOOST_DURATION) {
+            itemSpeedMultiplier = 1.0f;
         }
     }
-    
-    // Override damageCharacter để xử lý shield
+
     @Override
     public void damageCharacter(int damage) {
         if (shieldHits > 0) {
-            // Đỡ đòn bằng khiên
             shieldHits--;
-            System.out.println("Khiên đã đỡ đòn! Còn lại " + shieldHits + " đòn.");
-            return; // Không bị sát thương
+            return;
         }
-        
-        // Bị sát thương bình thường
         super.damageCharacter(damage);
     }
-    
-    // Getter methods
+
     public boolean hasSpeedBoost() {
-        return speedMultiplier > 1.0f;
+        return itemSpeedMultiplier > 1.0f;
     }
 
     public boolean hasShield() {
@@ -234,20 +275,32 @@ public class Player extends Character {
     }
 
     public long getSpeedBoostTimeLeft() {
-        if (!hasSpeedBoost()) return 0;
-        long elapsed = System.currentTimeMillis() - speedBoostStartTime;
-        long timeLeft = speedBoostDuration - elapsed;
-        return Math.max(0, timeLeft);
+        if (!hasSpeedBoost()) return 0L;
+        return Math.max(0L, SPEED_BOOST_DURATION
+                - (System.currentTimeMillis() - speedBoostStartTime));
     }
 
     public float getSpeedMultiplier() {
-        return speedMultiplier;
+        return characterSpeedMultiplier * itemSpeedMultiplier;
     }
 
-    // Method to reset player position when transitioning between maps
+    public GameCharacters getDisplayCharacter() {
+        return displayCharacter;
+    }
+
+    public int getDisplayAnimationIndex() {
+        if (isAttacking()) {
+            int attackFrame = Math.min(2,
+                    (int) (getAttackAnimationProgress() * 3f));
+            return 4 + attackFrame;
+        }
+        return displayCharacter.getMovementFrame(getAniIndex());
+    }
+
     public void resetPosition(float x, float y) {
-        // Reset player hitbox to new position
-        getHitbox().offsetTo(x - getHitbox().width() / 2, y - getHitbox().height() / 2);
-        System.out.println("🚀 Player position reset to: (" + x + ", " + y + ")");
+        getHitbox().offsetTo(
+                x - getHitbox().width() / 2f,
+                y - getHitbox().height() / 2f
+        );
     }
 }
